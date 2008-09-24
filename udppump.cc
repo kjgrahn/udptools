@@ -1,4 +1,4 @@
-/* $Id: udppump.cc,v 1.2 2008-09-24 21:09:56 grahn Exp $
+/* $Id: udppump.cc,v 1.3 2008-09-24 21:22:33 grahn Exp $
  *
  * udppump.cc -- udp load generator
  *
@@ -66,7 +66,17 @@ namespace {
 		const std::string& port)
     {
 	int fd = udpclient(host, port);
-	return fd == -1;
+	if(fd == -1) {
+	    return 1;
+	}
+
+	const char payload = 'x';
+	ssize_t n = send(fd, &payload, sizeof payload, 0);
+	if(n!=sizeof payload) {
+	    std::cerr << "error: " << strerror(errno) << '\n';
+	}
+
+	return close(fd);
     }
 }
 
