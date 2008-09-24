@@ -1,4 +1,4 @@
-/* $Id: udppump.cc,v 1.3 2008-09-24 21:22:33 grahn Exp $
+/* $Id: udppump.cc,v 1.4 2008-09-24 22:01:46 grahn Exp $
  *
  * udppump.cc -- udp load generator
  *
@@ -41,7 +41,7 @@ namespace {
 
 	const struct addrinfo& first = *suggestions;
 
-	std::cout << first.ai_canonname << '\n';
+	std::cout << "connecting to: " << first.ai_canonname << '\n';
 
 	int fd = socket(first.ai_family,
 			first.ai_socktype,
@@ -63,7 +63,8 @@ namespace {
     }
 
     int udppump(const std::string& host,
-		const std::string& port)
+		const std::string& port,
+		const unsigned npackets)
     {
 	int fd = udpclient(host, port);
 	if(fd == -1) {
@@ -71,10 +72,21 @@ namespace {
 	}
 
 	const char payload = 'x';
-	ssize_t n = send(fd, &payload, sizeof payload, 0);
-	if(n!=sizeof payload) {
-	    std::cerr << "error: " << strerror(errno) << '\n';
+	unsigned acc = 0;
+
+	for(unsigned i=0; i<npackets; ++i) {
+
+	    ssize_t n = send(fd, &payload, sizeof payload, 0);
+	    if(n==-1) {
+		std::cerr << "error: " << strerror(errno) << '\n';
+		break;
+	    }
+	    else {
+		acc += n/(sizeof payload);
+	    }
 	}
+
+	std::cout << "send(2) says we got away " << acc << " packets\n";
 
 	return close(fd);
     }
@@ -88,21 +100,28 @@ int main(int argc, char ** argv)
     const string prog = argv[0];
     const string usage = string("usage: ")
 	+ prog
-	+ " host port";
-    const char optstring[] = "+";
+	+ " [-n packets] host port";
+    const char optstring[] = "+n:";
     struct option long_options[] = {
+	{"packets", 0, 0, 'p'},
 	{"version", 0, 0, 'v'},
 	{"help", 0, 0, 'h'},
 	{0, 0, 0, 0}
     };
 
+    unsigned npackets = 1000000;
+
     int ch;
     while((ch = getopt_long(argc, argv,
 			    optstring, &long_options[0], 0)) != -1) {
 	switch(ch) {
+	case 'n':
+	    npackets = std::atol(optarg);
+	    break;
 	case 'h':
 	    std::cout << usage << '\n';
 	    return 0;
+	    break;
 	case 'v':
 	    std::cout << prog << ", the only version\n";
 	    return 0;
@@ -125,5 +144,5 @@ int main(int argc, char ** argv)
     const string host = argv[optind++];
     const string port = argv[optind++];
 
-    return udppump(host, port);
+    return udppump(host, port, npackets);
 }
