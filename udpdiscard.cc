@@ -1,4 +1,4 @@
-/* $Id: udpdiscard.cc,v 1.2 2008-10-07 18:32:41 grahn Exp $
+/* $Id: udpdiscard.cc,v 1.3 2008-10-07 20:47:47 grahn Exp $
  *
  * udpdiscard.cc -- federal udp pound-me-in-the-ass prison
  *
@@ -14,6 +14,7 @@
 #include <getopt.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/select.h>
 #include <netdb.h>
 #include <string.h>
 #include <errno.h>
@@ -66,14 +67,38 @@ namespace {
 
     int udpdiscard(const std::string& host,
 		   const std::string& port,
-		   const unsigned npackets)
+		   const unsigned maxpackets)
     {
-	int fd = udpserver(host, port);
+	const int fd = udpserver(host, port);
 	if(fd == -1) {
 	    return 1;
 	}
 
-	sleep(10);
+	fd_set fds;
+	FD_ZERO(&fds);
+
+	unsigned npackets = 0;
+	unsigned nselects = 0;
+
+	while(maxpackets && npackets < maxpackets) {
+
+	    FD_SET(fd, &fds);
+
+	    int rc = select(fd+1, &fds, 0, 0, 0);
+	    ++nselects;
+	    assert(rc!=-1);
+	    assert(rc==1);
+	    assert(FD_ISSET(fd, &fds));
+
+	    /* just read the first octet and ditch the rest  */
+	    char buf[1];
+	    ssize_t nb = recv(fd, buf, sizeof buf, 0);
+	    assert(nb==1);
+	    ++npackets;
+	}
+
+	std::cerr << npackets << " datagrams found via "
+		  << nselects << " select(2) calls\n";
 
 	return close(fd);
     }
