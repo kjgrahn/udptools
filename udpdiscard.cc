@@ -1,4 +1,4 @@
-/* $Id: udpdiscard.cc,v 1.3 2008-10-07 20:47:47 grahn Exp $
+/* $Id: udpdiscard.cc,v 1.4 2008-10-07 21:11:21 grahn Exp $
  *
  * udpdiscard.cc -- federal udp pound-me-in-the-ass prison
  *
@@ -11,6 +11,8 @@
 #include <ostream>
 #include <cassert>
 
+#include <unistd.h>
+#include <fcntl.h>
 #include <getopt.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -23,7 +25,8 @@
 namespace {
 
     int udpserver(const std::string& host,
-		  const std::string& port)
+		  const std::string& port,
+		  const bool nonblocking)
     {
 	static const struct addrinfo hints = { AI_PASSIVE,
 					       AF_UNSPEC,
@@ -62,14 +65,21 @@ namespace {
 
 	freeaddrinfo(suggestions);
 
+	if(nonblocking) {
+	    const int flags = fcntl(fd, F_GETFL, 0);
+	    rc = fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+	    assert(!rc);
+	}
+
 	return fd;
     }
 
     int udpdiscard(const std::string& host,
 		   const std::string& port,
-		   const unsigned maxpackets)
+		   const unsigned maxpackets,
+		   const bool nonblocking)
     {
-	const int fd = udpserver(host, port);
+	const int fd = udpserver(host, port, nonblocking);
 	if(fd == -1) {
 	    return 1;
 	}
@@ -79,6 +89,7 @@ namespace {
 
 	unsigned npackets = 0;
 	unsigned nselects = 0;
+	unsigned nreads = 0;
 
 	while(maxpackets && npackets < maxpackets) {
 
@@ -90,14 +101,22 @@ namespace {
 	    assert(rc==1);
 	    assert(FD_ISSET(fd, &fds));
 
-	    /* just read the first octet and ditch the rest  */
-	    char buf[1];
-	    ssize_t nb = recv(fd, buf, sizeof buf, 0);
-	    assert(nb==1);
-	    ++npackets;
+	    do {
+		/* just read the first octet and ditch the rest  */
+		char buf[1];
+		ssize_t nb = recv(fd, buf, sizeof buf, 0);
+		++nreads;
+		if(nb==-1) {
+		    assert(errno==EWOULDBLOCK);
+		    break;
+		}
+		assert(nb==1);
+		++npackets;
+	    } while(nonblocking);
 	}
 
 	std::cerr << npackets << " datagrams found via "
+		  << nreads << " read(2) calls, "
 		  << nselects << " select(2) calls\n";
 
 	return close(fd);
@@ -112,16 +131,18 @@ int main(int argc, char ** argv)
     const string prog = argv[0];
     const string usage = string("usage: ")
 	+ prog
-	+ " [-n packets] host port";
-    const char optstring[] = "+n:";
+	+ " [-n packets] [-N] host port";
+    const char optstring[] = "+n:N";
     struct option long_options[] = {
 	{"packets", 0, 0, 'p'},
+	{"nonblocking", 0, 0, 'N'},
 	{"version", 0, 0, 'v'},
 	{"help", 0, 0, 'h'},
 	{0, 0, 0, 0}
     };
 
     unsigned npackets = 1000000;
+    bool nonblocking = false;
 
     int ch;
     while((ch = getopt_long(argc, argv,
@@ -129,6 +150,9 @@ int main(int argc, char ** argv)
 	switch(ch) {
 	case 'n':
 	    npackets = std::atol(optarg);
+	    break;
+	case 'N':
+	    nonblocking = true;
 	    break;
 	case 'h':
 	    std::cout << usage << '\n';
@@ -156,5 +180,5 @@ int main(int argc, char ** argv)
     const string host = argv[optind++];
     const string port = argv[optind++];
 
-    return udpdiscard(host, port, npackets);
+    return udpdiscard(host, port, npackets, nonblocking);
 }
