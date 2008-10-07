@@ -1,4 +1,4 @@
-/* $Id: udpdiscard.cc,v 1.1 2008-10-07 18:12:13 grahn Exp $
+/* $Id: udpdiscard.cc,v 1.2 2008-10-07 18:32:41 grahn Exp $
  *
  * udpdiscard.cc -- federal udp pound-me-in-the-ass prison
  *
@@ -21,16 +21,16 @@
 
 namespace {
 
-    int udpclient(const std::string& host,
+    int udpserver(const std::string& host,
 		  const std::string& port)
     {
-	static const struct addrinfo hints = { AI_ADDRCONFIG | AI_CANONNAME,
+	static const struct addrinfo hints = { AI_PASSIVE,
 					       AF_UNSPEC,
 					       SOCK_DGRAM,
 					       0,
 					       0, 0, 0, 0 };
 	struct addrinfo * suggestions;
-	int rc = getaddrinfo(host.c_str(),
+	int rc = getaddrinfo(host.empty()? 0: host.c_str(),
 			     port.c_str(),
 			     &hints,
 			     &suggestions);
@@ -41,8 +41,6 @@ namespace {
 
 	const struct addrinfo& first = *suggestions;
 
-	std::cout << "connecting to: " << first.ai_canonname << '\n';
-
 	int fd = socket(first.ai_family,
 			first.ai_socktype,
 			first.ai_protocol);
@@ -51,7 +49,11 @@ namespace {
 	    return -1;	    
 	}
 
-	rc = connect(fd, first.ai_addr, first.ai_addrlen);
+	const char * const canon = first.ai_canonname;
+	std::cout << "binding to: "
+		  << (canon? canon : "*") << ':' << port << '\n';
+
+	rc = bind(fd, first.ai_addr, first.ai_addrlen);
 	if(rc) {
 	    std::cerr << "error: " << strerror(errno) << '\n';
 	    return -1;	    
@@ -62,31 +64,16 @@ namespace {
 	return fd;
     }
 
-    int udppump(const std::string& host,
-		const std::string& port,
-		const unsigned npackets)
+    int udpdiscard(const std::string& host,
+		   const std::string& port,
+		   const unsigned npackets)
     {
-	int fd = udpclient(host, port);
+	int fd = udpserver(host, port);
 	if(fd == -1) {
 	    return 1;
 	}
 
-	const char payload = 'x';
-	unsigned acc = 0;
-
-	for(unsigned i=0; i<npackets; ++i) {
-
-	    ssize_t n = send(fd, &payload, sizeof payload, 0);
-	    if(n==-1) {
-		std::cerr << "error: " << strerror(errno) << '\n';
-		break;
-	    }
-	    else {
-		acc += n/(sizeof payload);
-	    }
-	}
-
-	std::cout << "send(2) says we got away " << acc << " packets\n";
+	sleep(10);
 
 	return close(fd);
     }
@@ -144,5 +131,5 @@ int main(int argc, char ** argv)
     const string host = argv[optind++];
     const string port = argv[optind++];
 
-    return udppump(host, port, npackets);
+    return udpdiscard(host, port, npackets);
 }
