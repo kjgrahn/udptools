@@ -1,4 +1,4 @@
-/* $Id: udpdiscard.cc,v 1.4 2008-10-07 21:11:21 grahn Exp $
+/* $Id: udpdiscard.cc,v 1.5 2010-03-13 19:26:04 grahn Exp $
  *
  * udpdiscard.cc -- federal udp pound-me-in-the-ass prison
  *
@@ -10,6 +10,7 @@
 #include <iostream>
 #include <ostream>
 #include <cassert>
+#include <cstdlib>
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -97,6 +98,7 @@ namespace {
 
 	    int rc = select(fd+1, &fds, 0, 0, 0);
 	    ++nselects;
+	    if(rc==-1 && errno==EINTR) continue;
 	    assert(rc!=-1);
 	    assert(rc==1);
 	    assert(FD_ISSET(fd, &fds));

@@ -1,4 +1,4 @@
-/* $Id: udppump.cc,v 1.4 2008-09-24 22:01:46 grahn Exp $
+/* $Id: udppump.cc,v 1.5 2010-03-13 19:26:04 grahn Exp $
  *
  * udppump.cc -- udp load generator
  *
@@ -10,6 +10,7 @@
 #include <iostream>
 #include <ostream>
 #include <cassert>
+#include <cstdlib>
 
 #include <getopt.h>
 #include <sys/types.h>
