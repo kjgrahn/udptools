@@ -1,4 +1,4 @@
-/* $Id: udpcat.c,v 1.4 2011-11-30 01:16:41 grahn Exp $
+/* $Id: udpcat.c,v 1.5 2011-11-30 01:22:56 grahn Exp $
  *
  * udpcat.cc -- kind of like 'netcat -u host port', but with hexdump input
  *              so it can be binary
@@ -107,14 +107,15 @@ static int hexline(FILE* const in, const int lineno,
 	}
 	if(isxdigit(ch)) {
 	    *a++ = *b++;
-	    break;
 	}
-	fprintf(stderr, "error: line %d: unexpected character '%c'\n", lineno, ch);
-	return 0;
+	else {
+	    fprintf(stderr, "error: line %d: unexpected character '%c'\n", lineno, ch);
+	    return 0;
+	}
     }
     const char* const end = a;
     if((end-fbuf) % 2) {
-	fprintf(stderr, "error: line %d: odd number of hex digits\n", lineno);
+	fprintf(stderr, "error: line %d: odd number of hex digits (%u)\n", lineno, (unsigned)(end-fbuf));
 	return 0;
     }
     /* now hex-encode from fbuf..end into 'buf' */
@@ -144,7 +145,7 @@ static int udpcat(FILE* in, int fd)
     while((s = hexline(in, ++lineno, buf)) != -1) {
 
 	ssize_t n = send(fd, buf, s, 0);
-	if(n!=-s) {
+	if(n!=s) {
 	    fprintf(stderr, "warning: line %d: sending caused %s\n", lineno, strerror(errno));
 	    eacc++;
 	}
