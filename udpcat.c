@@ -1,4 +1,4 @@
-/* $Id: udpcat.c,v 1.5 2011-11-30 01:22:56 grahn Exp $
+/* $Id: udpcat.c,v 1.6 2011-11-30 01:37:44 grahn Exp $
  *
  * udpcat.cc -- kind of like 'netcat -u host port', but with hexdump input
  *              so it can be binary
@@ -59,6 +59,20 @@ static int udpclient(const char* host, const char* port)
     freeaddrinfo(suggestions);
 
     return fd;
+}
+
+
+/**
+ * Ask socket 'fd' to carry around do-nothing IP options,
+ * assuming it's an IPv4 socket.
+ */
+static void silly_options(int fd)
+{
+    uint8_t nopnop[] = {0, 0};
+    int rc = setsockopt(fd, IPPROTO_IP, IP_OPTIONS, nopnop, sizeof nopnop);
+    if(rc) {
+	fprintf(stderr, "warning: failed to set IP options: %s\n", strerror(errno));
+    }
 }
 
 
@@ -155,22 +169,29 @@ static int udpcat(FILE* in, int fd)
     return eacc!=0;
 }
 
+
 int main(int argc, char ** argv)
 {
     const char* const prog = argv[0];
     char usage[500];
-    sprintf(usage, "usage: %s host port", prog);
+    sprintf(usage, "usage: %s [--ip-option] host port", prog);
     const char optstring[] = "+";
     struct option long_options[] = {
+	{"ip-option", 0, 0, 'o'},
 	{"version", 0, 0, 'v'},
 	{"help", 0, 0, 'h'},
 	{0, 0, 0, 0}
     };
 
+    int use_ipoptions = 0;
+
     int ch;
     while((ch = getopt_long(argc, argv,
 			    optstring, &long_options[0], 0)) != -1) {
 	switch(ch) {
+	case 'o':
+	    use_ipoptions = 1;
+	    break;
 	case 'h':
 	    fprintf(stdout, "%s\n", usage);
 	    return 0;
@@ -200,6 +221,8 @@ int main(int argc, char ** argv)
     if(fd == -1) {
 	return 1;
     }
+
+    if(use_ipoptions) silly_options(fd);
 
     return udpcat(stdin, fd);
 }
