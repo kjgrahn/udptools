@@ -1,4 +1,4 @@
-/* $Id: udpcat.c,v 1.2 2011-11-30 00:35:22 grahn Exp $
+/* $Id: udpcat.c,v 1.3 2011-11-30 00:49:07 grahn Exp $
  *
  * udpcat.cc -- kind of like 'netcat -u host port', but with hexdump input
  *              so it can be binary
@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #include <getopt.h>
 #include <sys/types.h>
@@ -61,44 +62,41 @@ static int udpclient(const char* host, const char* port)
 
 
 /**
+ * Read a line of text from 'in' and (assuming it's all hex digits)
+ * encode it into 'buf' which is assumed to be large enough.
+ * Returns the number of octets encoded, or -1.
+ * Will log parse errors to stderr.
+ */
+static int hexline(FILE* in, int lineno, uint8_t* const buf)
+{
+}
+
+
+/**
  * Read hex from 'in' and write to UDP socket 'fd' until
  * EOF. Will log parse errors and I/O errors meanwhile.
+ * Returns an exit code.
  */
-static int udpcat(FILE* in, int fd);
+static int udpcat(FILE* in, int fd)
+{
+    int lineno = 0;
+    int s;
+    uint8_t buf[10000];
+    unsigned acc = 0;
+    unsigned eacc = 0;
 
-#if 0
-namespace {
+    while((s = hexline(in, ++lineno, buf)) != -1) {
 
-    int udppump(const std::string& host,
-		const std::string& port,
-		const unsigned npackets)
-    {
-	int fd = udpclient(host, port);
-	if(fd == -1) {
-	    return 1;
+	ssize_t n = send(fd, buf, s, 0);
+	if(n!=-s) {
+	    fprintf(stderr, "warning: sending line %d caused %s\n", lineno, strerror(errno));
+	    eacc++;
 	}
-
-	const char payload = 'x';
-	unsigned acc = 0;
-
-	for(unsigned i=0; i<npackets; ++i) {
-
-	    ssize_t n = send(fd, &payload, sizeof payload, 0);
-	    if(n==-1) {
-		std::cerr << "error: " << strerror(errno) << '\n';
-		break;
-	    }
-	    else {
-		acc += n/(sizeof payload);
-	    }
-	}
-
-	std::cout << "send(2) says we got away " << acc << " packets\n";
-
-	return close(fd);
+	acc++;
     }
+    fprintf(stdout, "send(2) got %u packets to send; %u whined about errors\n", acc, eacc);
+    return eacc!=0;
 }
-#endif
 
 int main(int argc, char ** argv)
 {
