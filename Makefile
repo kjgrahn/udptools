@@ -1,4 +1,4 @@
-# $Id: Makefile,v 1.1 2011-11-29 23:36:29 grahn Exp $
+# $Id: Makefile,v 1.2 2011-11-30 00:35:22 grahn Exp $
 #
 # Makefile
 #
@@ -42,6 +42,8 @@ udppump: udppump.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
 udpcat: udpcat.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
+
+udpcat.o: CPPFLAGS=-D_POSIX_SOURCE
 
 test.cc: libtest.a
 	testicle -o$@ $^

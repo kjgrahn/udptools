@@ -1,4 +1,4 @@
-/* $Id: udpcat.c,v 1.1 2011-11-29 23:39:50 grahn Exp $
+/* $Id: udpcat.c,v 1.2 2011-11-30 00:35:22 grahn Exp $
  *
  * udpcat.cc -- kind of like 'netcat -u host port', but with hexdump input
  *              so it can be binary
@@ -7,11 +7,9 @@
  * All rights reserved.
  *
  */
-#include <string>
-#include <iostream>
-#include <ostream>
-#include <cassert>
-#include <cstdlib>
+#include <stdio.h>
+#include <assert.h>
+#include <stdlib.h>
 
 #include <getopt.h>
 #include <sys/types.h>
@@ -21,48 +19,55 @@
 #include <errno.h>
 
 
-namespace {
-
-    int udpclient(const std::string& host,
-		  const std::string& port)
-    {
-	static const struct addrinfo hints = { AI_ADDRCONFIG | AI_CANONNAME,
-					       AF_UNSPEC,
-					       SOCK_DGRAM,
-					       0,
-					       0, 0, 0, 0 };
-	struct addrinfo * suggestions;
-	int rc = getaddrinfo(host.c_str(),
-			     port.c_str(),
-			     &hints,
-			     &suggestions);
-	if(rc) {
-	    std::cerr << "error: " << gai_strerror(rc) << '\n';
-	    return -1;
-	}
-
-	const struct addrinfo& first = *suggestions;
-
-	std::cout << "connecting to: " << first.ai_canonname << '\n';
-
-	int fd = socket(first.ai_family,
-			first.ai_socktype,
-			first.ai_protocol);
-	if(fd==-1) {
-	    std::cerr << "error: " << strerror(errno) << '\n';
-	    return -1;	    
-	}
-
-	rc = connect(fd, first.ai_addr, first.ai_addrlen);
-	if(rc) {
-	    std::cerr << "error: " << strerror(errno) << '\n';
-	    return -1;	    
-	}
-
-	freeaddrinfo(suggestions);
-
-	return fd;
+static int udpclient(const char* host, const char* port)
+{
+    static const struct addrinfo hints = { AI_ADDRCONFIG | AI_CANONNAME,
+					   AF_UNSPEC,
+					   SOCK_DGRAM,
+					   0,
+					   0, 0, 0, 0 };
+    struct addrinfo * suggestions;
+    int rc = getaddrinfo(host,
+			 port,
+			 &hints,
+			 &suggestions);
+    if(rc) {
+	fprintf(stderr, "error: %s\n", gai_strerror(rc));
+	return -1;
     }
+
+    const struct addrinfo first = *suggestions;
+
+    fprintf(stdout, "connecting to: %s\n", first.ai_canonname);
+
+    int fd = socket(first.ai_family,
+		    first.ai_socktype,
+		    first.ai_protocol);
+    if(fd==-1) {
+	fprintf(stderr, "error: %s\n", strerror(errno));
+	return -1;	    
+    }
+
+    rc = connect(fd, first.ai_addr, first.ai_addrlen);
+    if(rc) {
+	fprintf(stderr, "error: %s\n", strerror(errno));
+	return -1;	    
+    }
+
+    freeaddrinfo(suggestions);
+
+    return fd;
+}
+
+
+/**
+ * Read hex from 'in' and write to UDP socket 'fd' until
+ * EOF. Will log parse errors and I/O errors meanwhile.
+ */
+static int udpcat(FILE* in, int fd);
+
+#if 0
+namespace {
 
     int udppump(const std::string& host,
 		const std::string& port,
@@ -93,44 +98,35 @@ namespace {
 	return close(fd);
     }
 }
-
+#endif
 
 int main(int argc, char ** argv)
 {
-    using std::string;
-
-    const string prog = argv[0];
-    const string usage = string("usage: ")
-	+ prog
-	+ " [-n packets] host port";
-    const char optstring[] = "+n:";
+    const char* const prog = argv[0];
+    char usage[500];
+    sprintf(usage, "usage: %s host port", prog);
+    const char optstring[] = "+";
     struct option long_options[] = {
-	{"packets", 0, 0, 'p'},
 	{"version", 0, 0, 'v'},
 	{"help", 0, 0, 'h'},
 	{0, 0, 0, 0}
     };
 
-    unsigned npackets = 1000000;
-
     int ch;
     while((ch = getopt_long(argc, argv,
 			    optstring, &long_options[0], 0)) != -1) {
 	switch(ch) {
-	case 'n':
-	    npackets = std::atol(optarg);
-	    break;
 	case 'h':
-	    std::cout << usage << '\n';
+	    fprintf(stdout, "%s\n", usage);
 	    return 0;
 	    break;
 	case 'v':
-	    std::cout << prog << ", the only version\n";
+	    fprintf(stdout, "%s, the only version\n", prog);
 	    return 0;
 	    break;
 	case ':':
 	case '?':
-	    std::cerr << usage << '\n';
+	    fprintf(stderr, "%s\n", usage);
 	    return 1;
 	    break;
 	default:
@@ -139,12 +135,16 @@ int main(int argc, char ** argv)
     }
 
     if(argc - optind != 2) {
-	std::cerr << usage << '\n';
+	fprintf(stderr, "%s\n", usage);
 	return 1;
     }
 
-    const string host = argv[optind++];
-    const string port = argv[optind++];
+    const char* const host = argv[optind++];
+    const char* const port = argv[optind++];
+    int fd = udpclient(host, port);
+    if(fd == -1) {
+	return 1;
+    }
 
-    return udppump(host, port, npackets);
+    return udpcat(stdin, fd);
 }
