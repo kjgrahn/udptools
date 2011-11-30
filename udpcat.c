@@ -1,4 +1,4 @@
-/* $Id: udpcat.c,v 1.3 2011-11-30 00:49:07 grahn Exp $
+/* $Id: udpcat.c,v 1.4 2011-11-30 01:16:41 grahn Exp $
  *
  * udpcat.cc -- kind of like 'netcat -u host port', but with hexdump input
  *              so it can be binary
@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <ctype.h>
 
 #include <getopt.h>
 #include <sys/types.h>
@@ -61,14 +62,69 @@ static int udpclient(const char* host, const char* port)
 }
 
 
+static unsigned nybble(const char ch)
+{
+    /* sure, I assume a sane character set */
+    assert(isxdigit(ch));
+    if(isdigit(ch)) return ch - '0';
+    if('a' <= ch && ch <= 'f') return 10 + (ch - 'a');
+    assert('A' <= ch && ch <= 'F');
+    return 10 + (ch - 'A');
+}
+
+
+static void octet(uint8_t* const dst, const char* const src)
+{
+    *dst = nybble(src[0]) << 4;
+    *dst |= nybble(src[1]);
+}
+
+
 /**
  * Read a line of text from 'in' and (assuming it's all hex digits)
- * encode it into 'buf' which is assumed to be large enough.
+ * encode it into 'buf' (assumed to be big enough).
  * Returns the number of octets encoded, or -1.
  * Will log parse errors to stderr.
  */
-static int hexline(FILE* in, int lineno, uint8_t* const buf)
+static int hexline(FILE* const in, const int lineno,
+		   uint8_t* const buf)
 {
+    char fbuf[20000];
+    if(!fgets(fbuf, sizeof fbuf, in)) {
+	return -1;
+    }
+    char* a = fbuf;
+    const char* b = fbuf;
+    /* now do the compaction, and whitespace removal, from b to a */
+    while(*b) {
+	const char ch = *b;
+	if(isspace(ch)) {
+	    b++;
+	    continue;
+	}
+	if(ch=='#') {
+	    break;
+	}
+	if(isxdigit(ch)) {
+	    *a++ = *b++;
+	    break;
+	}
+	fprintf(stderr, "error: line %d: unexpected character '%c'\n", lineno, ch);
+	return 0;
+    }
+    const char* const end = a;
+    if((end-fbuf) % 2) {
+	fprintf(stderr, "error: line %d: odd number of hex digits\n", lineno);
+	return 0;
+    }
+    /* now hex-encode from fbuf..end into 'buf' */
+    uint8_t* p = buf;
+    a = fbuf;
+    while(a!=end) {
+	octet(p++, a);
+	a+=2;
+    }
+    return p-buf;
 }
 
 
@@ -89,7 +145,7 @@ static int udpcat(FILE* in, int fd)
 
 	ssize_t n = send(fd, buf, s, 0);
 	if(n!=-s) {
-	    fprintf(stderr, "warning: sending line %d caused %s\n", lineno, strerror(errno));
+	    fprintf(stderr, "warning: line %d: sending caused %s\n", lineno, strerror(errno));
 	    eacc++;
 	}
 	acc++;
