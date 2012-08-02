@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <unistd.h>
 #include <ctype.h>
 
 #include <getopt.h>
@@ -21,44 +22,79 @@
 #include <errno.h>
 
 
-static int udpclient(const char* host, const char* port)
+struct Client {
+    int fd;
+    int connected;
+    struct addrinfo * suggestions;
+};
+
+
+static void cli_create(struct Client* const this,
+		       const char* host, const char* port)
 {
     static const struct addrinfo hints = { AI_ADDRCONFIG | AI_CANONNAME,
 					   AF_UNSPEC,
 					   SOCK_DGRAM,
 					   0,
 					   0, 0, 0, 0 };
-    struct addrinfo * suggestions;
     int rc = getaddrinfo(host,
 			 port,
 			 &hints,
-			 &suggestions);
+			 &this->suggestions);
     if(rc) {
 	fprintf(stderr, "error: %s\n", gai_strerror(rc));
-	return -1;
+	return;
     }
 
-    const struct addrinfo first = *suggestions;
+    const struct addrinfo first = *this->suggestions;
+    this->fd = socket(first.ai_family,
+		      first.ai_socktype,
+		      first.ai_protocol);
+    if(this->fd==-1) {
+	fprintf(stderr, "error: %s\n", strerror(errno));
+	return;
+    }
+
+    this->connected = 0;
+}
+
+
+static int cli_connect(struct Client* const this)
+{
+    const struct addrinfo first = *this->suggestions;
 
     fprintf(stdout, "connecting to: %s\n", first.ai_canonname);
 
-    int fd = socket(first.ai_family,
-		    first.ai_socktype,
-		    first.ai_protocol);
-    if(fd==-1) {
-	fprintf(stderr, "error: %s\n", strerror(errno));
-	return -1;	    
-    }
-
-    rc = connect(fd, first.ai_addr, first.ai_addrlen);
+    int rc = connect(this->fd, first.ai_addr, first.ai_addrlen);
     if(rc) {
 	fprintf(stderr, "error: %s\n", strerror(errno));
-	return -1;	    
+	return 0;
     }
 
-    freeaddrinfo(suggestions);
+    this->connected = 1;
+    return 1;
+}
 
-    return fd;
+
+static ssize_t cli_send(const struct Client* const this,
+			const void *buf, size_t len)
+{
+    if(this->connected) {
+	return send(this->fd, buf, len, 0);
+    }
+    else {
+	const struct addrinfo first = *this->suggestions;
+	return sendto(this->fd,
+		      buf, len, 0,
+		      first.ai_addr, first.ai_addrlen);
+    }
+}
+
+
+static void cli_destroy(struct Client* const this)
+{
+    freeaddrinfo(this->suggestions);
+    close(this->fd);
 }
 
 
@@ -71,7 +107,8 @@ static void silly_options(int fd)
     uint8_t nopnop[] = {0, 0};
     int rc = setsockopt(fd, IPPROTO_IP, IP_OPTIONS, nopnop, sizeof nopnop);
     if(rc) {
-	fprintf(stderr, "warning: failed to set IP options: %s\n", strerror(errno));
+	fprintf(stderr, "warning: failed to set IP options: %s\n",
+		strerror(errno));
     }
 }
 
@@ -144,11 +181,11 @@ static int hexline(FILE* const in, const int lineno,
 
 
 /**
- * Read hex from 'in' and write to UDP socket 'fd' until
+ * Read hex from 'in' and write to UDP socket until
  * EOF. Will log parse errors and I/O errors meanwhile.
  * Returns an exit code.
  */
-static int udpcat(FILE* in, int fd)
+static int udpcat(FILE* in, const struct Client* const cli)
 {
     int lineno = 0;
     int s;
@@ -158,14 +195,16 @@ static int udpcat(FILE* in, int fd)
 
     while((s = hexline(in, ++lineno, buf)) != -1) {
 
-	ssize_t n = send(fd, buf, s, 0);
+	ssize_t n = cli_send(cli, buf, s);
 	if(n!=s) {
-	    fprintf(stderr, "warning: line %d: sending caused %s\n", lineno, strerror(errno));
+	    fprintf(stderr, "warning: line %d: sending caused %s\n",
+		    lineno, strerror(errno));
 	    eacc++;
 	}
 	acc++;
     }
-    fprintf(stdout, "send(2) got %u packets to send; %u whined about errors\n", acc, eacc);
+    fprintf(stdout, "send(2) got %u packets to send; %u whined about errors\n",
+	    acc, eacc);
     return eacc!=0;
 }
 
@@ -174,9 +213,10 @@ int main(int argc, char ** argv)
 {
     const char* const prog = argv[0];
     char usage[500];
-    sprintf(usage, "usage: %s [--ip-option] host port", prog);
+    sprintf(usage, "usage: %s [--connect] [--ip-option] host port", prog);
     const char optstring[] = "+";
     struct option long_options[] = {
+	{"connect", 0, 0, 'c'},
 	{"ip-option", 0, 0, 'o'},
 	{"version", 0, 0, 'v'},
 	{"help", 0, 0, 'h'},
@@ -184,11 +224,15 @@ int main(int argc, char ** argv)
     };
 
     int use_ipoptions = 0;
+    int connect = 0;
 
     int ch;
     while((ch = getopt_long(argc, argv,
 			    optstring, &long_options[0], 0)) != -1) {
 	switch(ch) {
+	case 'c':
+	    connect = 1;
+	    break;
 	case 'o':
 	    use_ipoptions = 1;
 	    break;
@@ -217,12 +261,17 @@ int main(int argc, char ** argv)
 
     const char* const host = argv[optind++];
     const char* const port = argv[optind++];
-    int fd = udpclient(host, port);
-    if(fd == -1) {
+    struct Client cli;
+    cli_create(&cli, host, port);
+    if(cli.fd == -1) {
 	return 1;
     }
 
-    if(use_ipoptions) silly_options(fd);
+    if(connect && !cli_connect(&cli)) {
+	return 1;
+    }
 
-    return udpcat(stdin, fd);
+    if(use_ipoptions) silly_options(cli.fd);
+
+    return udpcat(stdin, &cli);
 }
