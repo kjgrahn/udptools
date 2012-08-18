@@ -18,6 +18,7 @@
 #include <netdb.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
 
 
 namespace {
