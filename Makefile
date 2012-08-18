@@ -45,14 +45,22 @@ udpcat: udpcat.o
 
 udpcat.o: CPPFLAGS=-D_POSIX_SOURCE
 
+libudptools.a: hexdump.o
+	$(AR) -r $@ $^
+
+
 test.cc: libtest.a
 	testicle -o$@ $^
 
-tests: test.o libtest.a
-	$(CXX) $(CXXFLAGS) -o $@ test.o -L. -ltest -lpthread
+tests: test.o libtest.a libudptools.a
+	$(CXX) $(CXXFLAGS) -o $@ test.o -L. -ltest -ludptools
 
-libtest.a: test_queue.o
+libtest.a: test/hexread.o
+libtest.a: test/hexdump.o
 	$(AR) -r $@ $^
+
+test/%.o : CPPFLAGS+=-I.
+
 
 .PHONY: tags
 tags: TAGS
@@ -60,9 +68,12 @@ TAGS:
 	etags *.cc *.h
 
 depend:
-	makedepend -- $(CFLAGS) -- -Y *.cc
+	makedepend -- -I. $(CFLAGS) -- -Y *.cc *.c test/*.cc
 
 love:
 	@echo "not war?"
 
 # DO NOT DELETE
+
+hexdump.o: hexdump.h
+test/hexdump.o: hexdump.h

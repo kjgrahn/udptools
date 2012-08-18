@@ -1,0 +1,8 @@
+*.bak
+*.o
+*.a
+test.cc
+tests
+udpcat
+udpdiscard
+udppump
