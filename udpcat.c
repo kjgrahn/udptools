@@ -21,6 +21,8 @@
 #include <string.h>
 #include <errno.h>
 
+#include "hexread.h"
+
 
 struct Client {
     int fd;
@@ -32,6 +34,7 @@ struct Client {
 static void cli_create(struct Client* const this,
 		       const char* host, const char* port)
 {
+    this->fd = -1;
     static const struct addrinfo hints = { AI_ADDRCONFIG | AI_CANONNAME,
 					   AF_UNSPEC,
 					   SOCK_DGRAM,
@@ -113,24 +116,6 @@ static void silly_options(int fd)
 }
 
 
-static unsigned nybble(const char ch)
-{
-    /* sure, I assume a sane character set */
-    assert(isxdigit(ch));
-    if(isdigit(ch)) return ch - '0';
-    if('a' <= ch && ch <= 'f') return 10 + (ch - 'a');
-    assert('A' <= ch && ch <= 'F');
-    return 10 + (ch - 'A');
-}
-
-
-static void octet(uint8_t* const dst, const char* const src)
-{
-    *dst = nybble(src[0]) << 4;
-    *dst |= nybble(src[1]);
-}
-
-
 /**
  * Read a line of text from 'in' and (assuming it's all hex digits)
  * encode it into 'buf' (assumed to be big enough).
@@ -144,39 +129,17 @@ static int hexline(FILE* const in, const int lineno,
     if(!fgets(fbuf, sizeof fbuf, in)) {
 	return -1;
     }
-    char* a = fbuf;
-    const char* b = fbuf;
-    /* now do the compaction, and whitespace removal, from b to a */
-    while(*b) {
-	const char ch = *b;
-	if(isspace(ch)) {
-	    b++;
-	    continue;
-	}
-	if(ch=='#') {
-	    break;
-	}
-	if(isxdigit(ch)) {
-	    *a++ = *b++;
-	}
-	else {
-	    fprintf(stderr, "error: line %d: unexpected character '%c'\n", lineno, ch);
-	    return 0;
-	}
-    }
-    const char* const end = a;
-    if((end-fbuf) % 2) {
-	fprintf(stderr, "error: line %d: odd number of hex digits (%u)\n", lineno, (unsigned)(end-fbuf));
+    const char* a = fbuf;
+    const char* b = a + strlen(a);
+    const size_t n = hexread(buf, &a, b);
+
+    if(a!=b) {
+	fprintf(stderr, "error: line %d: unexpected character '%c'\n",
+		lineno, *a);
 	return 0;
     }
-    /* now hex-encode from fbuf..end into 'buf' */
-    uint8_t* p = buf;
-    a = fbuf;
-    while(a!=end) {
-	octet(p++, a);
-	a+=2;
-    }
-    return p-buf;
+
+    return n;
 }
 
 

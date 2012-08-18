@@ -36,12 +36,12 @@ all: udpdiscard
 all: udppump
 all: udpcat
 
-udpdiscard: udpdiscard.o
-	$(CXX) $(CXXFLAGS) -o $@ $^
-udppump: udppump.o
-	$(CXX) $(CXXFLAGS) -o $@ $^
-udpcat: udpcat.o
-	$(CXX) $(CXXFLAGS) -o $@ $^
+udpdiscard: udpdiscard.o libudptools.a
+	$(CXX) $(CXXFLAGS) -L. -o $@ $< -l udptools
+udppump: udppump.o libudptools.a
+	$(CXX) $(CXXFLAGS) -L. -o $@ $< -l udptools
+udpcat: udpcat.o libudptools.a
+	$(CXX) $(CXXFLAGS) -L. -o $@ $< -l udptools
 
 udpcat.o: CPPFLAGS=-D_POSIX_SOURCE
 
@@ -78,5 +78,6 @@ love:
 
 hexdump.o: hexdump.h
 hexread.o: hexread.h
+udpcat.o: hexread.h
 test/hexdump.o: hexdump.h
 test/hexread.o: hexread.h
