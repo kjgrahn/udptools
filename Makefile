@@ -46,6 +46,7 @@ udpcat: udpcat.o
 udpcat.o: CPPFLAGS=-D_POSIX_SOURCE
 
 libudptools.a: hexdump.o
+libudptools.a: hexread.o
 	$(AR) -r $@ $^
 
 
@@ -76,4 +77,6 @@ love:
 # DO NOT DELETE
 
 hexdump.o: hexdump.h
+hexread.o: hexread.h
 test/hexdump.o: hexdump.h
+test/hexread.o: hexread.h
