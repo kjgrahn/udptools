@@ -115,7 +115,7 @@ int main(int argc, char ** argv)
     const char* const prog = argv[0];
     char usage[500];
     sprintf(usage, "usage: %s -i interface", prog);
-    const char optstring[] = "+i";
+    const char optstring[] = "+i:";
     struct option long_options[] = {
 	{"version", 0, 0, 'v'},
 	{"help", 0, 0, 'h'},
