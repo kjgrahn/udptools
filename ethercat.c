@@ -13,9 +13,7 @@
 #include <ctype.h>
 
 #include <getopt.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
+#include <pcap/pcap.h>
 #include <string.h>
 #include <errno.h>
 
@@ -44,101 +42,7 @@
  ----------
  20
 
-
-
  */
-
-
-struct Client {
-    int fd;
-    int connected;
-    struct addrinfo * suggestions;
-};
-
-
-static void cli_create(struct Client* const this,
-		       const char* host, const char* port)
-{
-    this->fd = -1;
-    static const struct addrinfo hints = { AI_ADDRCONFIG | AI_CANONNAME,
-					   AF_UNSPEC,
-					   SOCK_DGRAM,
-					   0,
-					   0, 0, 0, 0 };
-    int rc = getaddrinfo(host,
-			 port,
-			 &hints,
-			 &this->suggestions);
-    if(rc) {
-	fprintf(stderr, "error: %s\n", gai_strerror(rc));
-	return;
-    }
-
-    const struct addrinfo first = *this->suggestions;
-    this->fd = socket(first.ai_family,
-		      first.ai_socktype,
-		      first.ai_protocol);
-    if(this->fd==-1) {
-	fprintf(stderr, "error: %s\n", strerror(errno));
-	return;
-    }
-
-    this->connected = 0;
-}
-
-
-static int cli_connect(struct Client* const this)
-{
-    const struct addrinfo first = *this->suggestions;
-
-    fprintf(stdout, "connecting to: %s\n", first.ai_canonname);
-
-    int rc = connect(this->fd, first.ai_addr, first.ai_addrlen);
-    if(rc) {
-	fprintf(stderr, "error: %s\n", strerror(errno));
-	return 0;
-    }
-
-    this->connected = 1;
-    return 1;
-}
-
-
-static ssize_t cli_send(const struct Client* const this,
-			const void *buf, size_t len)
-{
-    if(this->connected) {
-	return send(this->fd, buf, len, 0);
-    }
-    else {
-	const struct addrinfo first = *this->suggestions;
-	return sendto(this->fd,
-		      buf, len, 0,
-		      first.ai_addr, first.ai_addrlen);
-    }
-}
-
-
-static void cli_destroy(struct Client* const this)
-{
-    freeaddrinfo(this->suggestions);
-    close(this->fd);
-}
-
-
-/**
- * Ask socket 'fd' to carry around do-nothing IP options,
- * assuming it's an IPv4 socket.
- */
-static void silly_options(int fd)
-{
-    uint8_t nopnop[] = {0, 0};
-    int rc = setsockopt(fd, IPPROTO_IP, IP_OPTIONS, nopnop, sizeof nopnop);
-    if(rc) {
-	fprintf(stderr, "warning: failed to set IP options: %s\n",
-		strerror(errno));
-    }
-}
 
 
 /**
@@ -169,11 +73,10 @@ static int hexline(FILE* const in, const int lineno,
 
 
 /**
- * Read hex from 'in' and write to UDP socket until
- * EOF. Will log parse errors and I/O errors meanwhile.
- * Returns an exit code.
+ * Read hex from 'in' and pcap_inject() until EOF. Will log parse
+ * errors and I/O errors meanwhile.  Returns an exit code.
  */
-static int udpcat(FILE* in, const struct Client* const cli)
+static int ethercat(FILE* in, pcap_t* pcap)
 {
     int lineno = 0;
     int s;
@@ -183,15 +86,15 @@ static int udpcat(FILE* in, const struct Client* const cli)
 
     while((s = hexline(in, ++lineno, buf)) != -1) {
 
-	ssize_t n = cli_send(cli, buf, s);
-	if(n!=s) {
+	int n = pcap_inject(pcap, buf, s);
+	if(n < s) {
 	    fprintf(stderr, "warning: line %d: sending caused %s\n",
-		    lineno, strerror(errno));
+		    lineno, pcap_geterr(pcap));
 	    eacc++;
 	}
 	acc++;
     }
-    fprintf(stdout, "send(2) got %u packets to send; %u whined about errors\n",
+    fprintf(stdout, "got %u packets to pcap-inject; %u whined about errors\n",
 	    acc, eacc);
     return eacc!=0;
 }
@@ -201,28 +104,22 @@ int main(int argc, char ** argv)
 {
     const char* const prog = argv[0];
     char usage[500];
-    sprintf(usage, "usage: %s [--connect] [--ip-option] host port", prog);
-    const char optstring[] = "+";
+    sprintf(usage, "usage: %s -i interface", prog);
+    const char optstring[] = "+i";
     struct option long_options[] = {
-	{"connect", 0, 0, 'c'},
-	{"ip-option", 0, 0, 'o'},
 	{"version", 0, 0, 'v'},
 	{"help", 0, 0, 'h'},
 	{0, 0, 0, 0}
     };
 
-    int use_ipoptions = 0;
-    int connect = 0;
+    const char* iface = 0;
 
     int ch;
     while((ch = getopt_long(argc, argv,
 			    optstring, &long_options[0], 0)) != -1) {
 	switch(ch) {
-	case 'c':
-	    connect = 1;
-	    break;
-	case 'o':
-	    use_ipoptions = 1;
+	case 'i':
+	    iface = optarg;
 	    break;
 	case 'h':
 	    fprintf(stdout, "%s\n", usage);
@@ -242,24 +139,27 @@ int main(int argc, char ** argv)
 	}
     }
 
-    if(argc - optind != 2) {
+    if(!iface) {
+	fprintf(stderr,
+		"error: required argument missing.\n"
+		"%s\n", usage);
+	return 1;
+    }
+
+    if(argc - optind != 0) {
 	fprintf(stderr, "%s\n", usage);
 	return 1;
     }
 
-    const char* const host = argv[optind++];
-    const char* const port = argv[optind++];
-    struct Client cli;
-    cli_create(&cli, host, port);
-    if(cli.fd == -1) {
+    char err[PCAP_ERRBUF_SIZE];
+    strcpy(err, "");
+    pcap_t* pcap = pcap_open_live(iface, 65, 0, 0, err);
+    if(strlen(err)) {
+	fprintf(stderr, "%s: %s\n", prog, err);
+    }
+    if(!pcap) {
 	return 1;
     }
 
-    if(connect && !cli_connect(&cli)) {
-	return 1;
-    }
-
-    if(use_ipoptions) silly_options(cli.fd);
-
-    return udpcat(stdin, &cli);
+    return ethercat(stdin, pcap);
 }

@@ -35,6 +35,7 @@ CFLAGS=-Wall -Wextra -pedantic -std=c99 -g -Os
 all: udpdiscard
 all: udppump
 all: udpcat
+all: ethercat
 
 udpdiscard: udpdiscard.o libudptools.a
 	$(CXX) $(CXXFLAGS) -L. -o $@ $< -l udptools
@@ -42,8 +43,11 @@ udppump: udppump.o libudptools.a
 	$(CXX) $(CXXFLAGS) -L. -o $@ $< -l udptools
 udpcat: udpcat.o libudptools.a
 	$(CXX) $(CXXFLAGS) -L. -o $@ $< -l udptools
+ethercat: ethercat.o libudptools.a
+	$(CXX) $(CXXFLAGS) -L. -o $@ $< -l udptools -lpcap
 
 udpcat.o: CPPFLAGS=-D_POSIX_SOURCE
+ethercat.o: CPPFLAGS=-D_BSD_SOURCE
 
 libudptools.a: hexdump.o
 libudptools.a: hexread.o
@@ -76,6 +80,7 @@ love:
 
 # DO NOT DELETE
 
+ethercat.o: hexread.h
 hexdump.o: hexdump.h
 hexread.o: hexread.h
 udpcat.o: hexread.h
