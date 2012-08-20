@@ -19,31 +19,6 @@
 
 #include "hexread.h"
 
-/*
-
- ----------
-  6  h_dest
-  6  h_source
-  2 h_proto
- ----------
- 14
-
- ----------
-  1  version+ihl
-  1  tos
-  2  total_len
-  2  id
-  2  frag_off
-  1  ttl
-  1  proto
-  2  checksum
-  4  source
-  4  dest
- ----------
- 20
-
- */
-
 
 /**
  * Read a line of text from 'in' and (assuming it's all hex digits)
@@ -100,6 +75,41 @@ static int ethercat(FILE* in, pcap_t* pcap)
 }
 
 
+static void cheatsheet(FILE* f)
+{
+    /*
+     * ----------
+     * 6  h_dest
+     * 6  h_source
+     * 2  h_proto
+     * ----------
+     * 14 Ethernet
+     *
+     * ----------
+     * 1  version+ihl
+     * 1  tos
+     * 2  total_len
+     * 2  id
+     * 2  frag_off
+     * 1  ttl
+     * 1  proto
+     * 2  checksum
+     * 4  source
+     * 4  dest
+     * ----------
+     * 20 IPv4
+     *
+     */
+    fputs("dest mac      source mac    proto\n"
+	  "000000 000000 000000 000000 8100  = 14 octets ethernet\n"
+	  " vid proto\n"
+	  "0000 0800  = 4 octets 802.1q\n"
+	  "  tos tlen id   frag       cksum  src      dest\n"
+	  "45 00 0000 0000 0000 40 11 0000 00000000 00000000  = 20 octets IPv4\n",
+	  f);
+}
+
+
 int main(int argc, char ** argv)
 {
     const char* const prog = argv[0];
@@ -122,7 +132,9 @@ int main(int argc, char ** argv)
 	    iface = optarg;
 	    break;
 	case 'h':
-	    fprintf(stdout, "%s\n", usage);
+	    fprintf(stdout, "%s\n"
+		    "\n", usage);
+	    cheatsheet(stdout);
 	    return 0;
 	    break;
 	case 'v':
