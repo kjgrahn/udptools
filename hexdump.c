@@ -24,17 +24,19 @@ static const uint8_t* dump(char* buf, size_t size,
 {
     const uint8_t* p = begin;
 
-    while(size>2 && p!=end) {
-	if(p!=begin) {
-	    *buf++ = ' ';
-	    size--;
-	}
+    if(size>2 && p!=end) {
 	*buf++ = nybble((*p) >> 4);
 	*buf++ = nybble((*p) & 0x0f);
 	size -= 2;
 	p++;
     }
-    /* buggy */
+    while(size>3 && p!=end) {
+	*buf++ = ' ';
+	*buf++ = nybble((*p) >> 4);
+	*buf++ = nybble((*p) & 0x0f);
+	size -= 3;
+	p++;
+    }
     *buf++ = '\0';
     return p;
 }
@@ -42,8 +44,9 @@ static const uint8_t* dump(char* buf, size_t size,
 
 /**
  * Format [begin .. end) as hex octets, as much of it
- * which fits in 'buf', of size 'size'.  The NUL character is
- * included in the calculations.
+ * which fits in 'buf', of size 'size'.  'size' must
+ * allow room for the '\0' terminator (for example, be
+ * non-zero).
  *
  * Returns the first octet not formatted.
  *
