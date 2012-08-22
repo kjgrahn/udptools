@@ -21,7 +21,8 @@ all: udpcat
 .PHONY: clean
 clean:
 	$(RM) udpdiscard udppump udpcat
-	$(RM) *.o Makefile.bak core TAGS
+	$(RM) ethercat
+	$(RM) *.o *.a Makefile.bak core TAGS
 
 .PHONY: check checkv
 check: tests
