@@ -25,14 +25,13 @@ namespace {
     const void* hexdump(std::string& buf, size_t count,
 			const void* begin, const void* end)
     {
-	char cbuf[2000];
-	assert(sizeof cbuf > count);
+	/* to please Valgrind */
+	char* cbuf = new char[count];
 	const void* p = ::hexdump(cbuf, count, begin, end);
 	buf = std::string(cbuf);
+	delete[] cbuf;
 	return p;
     }
-
-
 }
 
 
@@ -43,7 +42,7 @@ namespace hex {
     void test_nil()
     {
 	std::string s;
-	assert_eq(hexdump(s, 0, data, data), data);
+	assert_eq(hexdump(s, 1, data, data), data);
 	assert_eq(s, "");
     }
 
@@ -53,6 +52,16 @@ namespace hex {
 	const void * p = data;
 	p = hexdump(s, 3*8, p, data+datalen);
 	assert_eq(s, "46 6f 6f 20 62 61 72 20");
+	assert_eq(p, data+8);
+    }
+
+    void test_almost_enough()
+    {
+	std::string s;
+	const void * p = data;
+	p = hexdump(s, 3*8-1, p, data+datalen);
+	assert_eq(s, "46 6f 6f 20 62 61 72");
+	assert_eq(p, data+7);
     }
 
     void test_lines()
