@@ -166,8 +166,13 @@ static int udpcat(FILE* in, const struct Client* const cli)
 	}
 	acc++;
     }
-    fprintf(stdout, "send(2) got %u packets to send; %u whined about errors\n",
-	    acc, eacc);
+    if(eacc) {
+	fprintf(stdout, "send(2) got %u packets to send; %u whined about errors\n",
+		acc, eacc);
+    }
+    else {
+	fprintf(stdout, "send(2) got %u packets to send\n", acc);
+    }
     return eacc!=0;
 }
 
