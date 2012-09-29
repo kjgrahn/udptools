@@ -3,7 +3,7 @@
  * udpcat.cc -- kind of like 'netcat -u host port', but with hexdump input
  *              so it can be binary
  *
- * Copyright (c) 2008, 2011 Jörgen Grahn
+ * Copyright (c) 2008, 2011, 2012 Jörgen Grahn
  * All rights reserved.
  *
  */
@@ -241,5 +241,8 @@ int main(int argc, char ** argv)
 
     if(use_ipoptions) silly_options(cli.fd);
 
-    return udpcat(stdin, &cli);
+    int rc = udpcat(stdin, &cli);
+
+    cli_destroy(&cli);
+    return rc;
 }
