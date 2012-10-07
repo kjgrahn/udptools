@@ -20,6 +20,7 @@
 #include <netdb.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/epoll.h>
 
 #include "hexread.h"
 
@@ -28,6 +29,7 @@ struct Client {
     int fd;
     int connected;
     struct addrinfo * suggestions;
+    int efd;
 };
 
 
@@ -50,13 +52,23 @@ static void cli_create(struct Client* const this,
     }
 
     const struct addrinfo first = *this->suggestions;
-    this->fd = socket(first.ai_family,
-		      first.ai_socktype,
-		      first.ai_protocol);
-    if(this->fd==-1) {
+    const int fd = socket(first.ai_family,
+			  first.ai_socktype,
+			  first.ai_protocol);
+    if(fd==-1) {
 	fprintf(stderr, "error: %s\n", strerror(errno));
 	return;
     }
+    this->fd = fd;
+
+    const int efd = epoll_create(1);
+    assert(efd > 0);
+    this->efd = efd;
+    struct epoll_event ev;
+    ev.events = EPOLLIN;
+    ev.data.ptr = 0;
+    rc = epoll_ctl(efd, EPOLL_CTL_ADD, fd, &ev);
+    assert(!rc);
 
     this->connected = 0;
 }
@@ -98,6 +110,7 @@ static void cli_destroy(struct Client* const this)
 {
     freeaddrinfo(this->suggestions);
     close(this->fd);
+    close(this->efd);
 }
 
 
@@ -158,13 +171,39 @@ static int udpcat(FILE* in, const struct Client* const cli)
 
     while((s = hexline(in, ++lineno, buf)) != -1) {
 
-	ssize_t n = cli_send(cli, buf, s);
+	const ssize_t n = cli_send(cli, buf, s);
 	if(n!=s) {
 	    fprintf(stderr, "warning: line %d: sending caused %s\n",
 		    lineno, strerror(errno));
 	    eacc++;
 	}
 	acc++;
+
+	struct epoll_event ev[1];
+	int rc = epoll_wait(cli->efd, ev, 1, 1000);
+	if(rc==1) {
+	    struct iovec v = { 0, 0 };
+	    struct msghdr m = { 0, 0, &v, 1,
+				0, 0,
+				0 };
+	    const ssize_t nn = recvmsg(cli->fd, &m, MSG_TRUNC);
+	    if(nn < 0) {
+		fprintf(stderr, "warning: line %d: bad reply: %s\n",
+			lineno, strerror(errno));
+	    }
+	    else if(nn!=s) {
+		fprintf(stderr, "warning: line %d: wrong answer, banana #2n",
+			lineno);
+	    }
+	}
+	else if(rc==0) {
+	     fprintf(stderr, "warning: line %d: no reply\n",
+		     lineno);
+	}
+	else {
+	    fprintf(stderr, "warning: line %d: epoll failure: %s\n",
+		    lineno, strerror(errno));
+	}
     }
     if(eacc) {
 	fprintf(stdout, "send(2) got %u packets to send; %u whined about errors\n",
