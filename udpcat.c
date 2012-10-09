@@ -110,6 +110,55 @@ static ssize_t cli_send(const struct Client* const this,
 }
 
 
+/* Expect 'n' datagrams, each of 'size', to appear within
+ * 'timeout' milliseconds.  Otherwise print an error.
+ */
+static void cli_expect(const struct Client* const this,
+		       const int lineno,
+		       const unsigned timeout,
+		       const unsigned n,
+		       const ssize_t size)
+{
+    unsigned nn = n;
+    unsigned actual = 0;
+    struct epoll_event ev[1];
+    int rc = epoll_wait(this->efd, ev, 1, timeout);
+    if(rc==1) {
+	while(nn--) {
+	    struct iovec v = { 0, 0 };
+	    struct msghdr m = { 0, 0, &v, 1,
+				0, 0,
+				0 };
+	    const ssize_t sz = recvmsg(this->fd, &m,
+				       MSG_DONTWAIT | MSG_TRUNC);
+	    if(sz < 0 && errno == EWOULDBLOCK) {
+		break;
+	    }
+	    else if(sz < 0) {
+		fprintf(stderr, "warning: line %d: bad reply: %s\n",
+			lineno, strerror(errno));
+	    }
+	    else if(sz!=size) {
+		fprintf(stderr, "warning: line %d: wrong answer, banana #2\n",
+			lineno);
+	    }
+	    else {
+		actual++;
+	    }
+	}
+    }
+    else if(rc<0) {
+	fprintf(stderr, "warning: line %d: epoll failure: %s\n",
+		lineno, strerror(errno));
+    }
+
+    if(actual != n) {
+	fprintf(stderr, "warning: line %d: expected %u good replies, but only got %u\n",
+		lineno, n, actual);
+    }
+}
+
+
 static void cli_destroy(struct Client* const this)
 {
     freeaddrinfo(this->suggestions);
@@ -191,31 +240,7 @@ static int udpcat(FILE* in, const struct Client* const cli)
 	    acc++;
 	}
 
-	struct epoll_event ev[1];
-	int rc = epoll_wait(cli->efd, ev, 1, 1000);
-	if(rc==1) {
-	    struct iovec v = { 0, 0 };
-	    struct msghdr m = { 0, 0, &v, 1,
-				0, 0,
-				0 };
-	    const ssize_t nn = recvmsg(cli->fd, &m, MSG_TRUNC);
-	    if(nn < 0) {
-		fprintf(stderr, "warning: line %d: bad reply: %s\n",
-			lineno, strerror(errno));
-	    }
-	    else if(nn!=s) {
-		fprintf(stderr, "warning: line %d: wrong answer, banana #2\n",
-			lineno);
-	    }
-	}
-	else if(rc==0) {
-	     fprintf(stderr, "warning: line %d: no reply\n",
-		     lineno);
-	}
-	else {
-	    fprintf(stderr, "warning: line %d: epoll failure: %s\n",
-		    lineno, strerror(errno));
-	}
+	cli_expect(cli, lineno, 500, cli->multiplier, s);
     }
 
     if(eacc) {
