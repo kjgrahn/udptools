@@ -49,6 +49,7 @@ ethercat: ethercat.o libudptools.a
 
 udpcat.o: CPPFLAGS=-D_POSIX_SOURCE
 ethercat.o: CPPFLAGS=-D_BSD_SOURCE
+udpdiscard.o: CXXFLAGS+=-Wno-old-style-cast
 
 libudptools.a: hexdump.o
 libudptools.a: hexread.o

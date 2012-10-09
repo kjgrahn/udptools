@@ -30,11 +30,13 @@ struct Client {
     int connected;
     struct addrinfo * suggestions;
     int efd;
+    unsigned multiplier;
 };
 
 
 static void cli_create(struct Client* const this,
-		       const char* host, const char* port)
+		       const char* host, const char* port,
+		       unsigned multiplier)
 {
     this->fd = -1;
     static const struct addrinfo hints = { AI_ADDRCONFIG | AI_CANONNAME,
@@ -59,6 +61,7 @@ static void cli_create(struct Client* const this,
 	fprintf(stderr, "error: %s\n", strerror(errno));
 	return;
     }
+
     this->fd = fd;
 
     const int efd = epoll_create(1);
@@ -71,6 +74,7 @@ static void cli_create(struct Client* const this,
     assert(!rc);
 
     this->connected = 0;
+    this->multiplier = multiplier;
 }
 
 
@@ -171,13 +175,21 @@ static int udpcat(FILE* in, const struct Client* const cli)
 
     while((s = hexline(in, ++lineno, buf)) != -1) {
 
-	const ssize_t n = cli_send(cli, buf, s);
-	if(n!=s) {
-	    fprintf(stderr, "warning: line %d: sending caused %s\n",
-		    lineno, strerror(errno));
-	    eacc++;
+	unsigned m = cli->multiplier;
+
+	while(m--) {
+	    const ssize_t n = cli_send(cli, buf, s);
+	    int complained = 0;
+	    if(n!=s) {
+		if(!complained) {
+		    fprintf(stderr, "warning: line %d: sending caused %s\n",
+			    lineno, strerror(errno));
+		    complained = 1;
+		}
+		eacc++;
+	    }
+	    acc++;
 	}
-	acc++;
 
 	struct epoll_event ev[1];
 	int rc = epoll_wait(cli->efd, ev, 1, 1000);
@@ -205,12 +217,14 @@ static int udpcat(FILE* in, const struct Client* const cli)
 		    lineno, strerror(errno));
 	}
     }
+
     if(eacc) {
-	fprintf(stdout, "send(2) got %u packets to send; %u whined about errors\n",
+	fprintf(stdout, "send(2) got %u packets to send; "
+		"%u complaint(s)\n",
 		acc, eacc);
     }
     else {
-	fprintf(stdout, "send(2) got %u packets to send\n", acc);
+	fprintf(stdout, "%u datagrams sent\n", acc);
     }
     return eacc!=0;
 }
@@ -220,8 +234,10 @@ int main(int argc, char ** argv)
 {
     const char* const prog = argv[0];
     char usage[500];
-    sprintf(usage, "usage: %s [--connect] [--ip-option] host port", prog);
-    const char optstring[] = "+";
+    sprintf(usage,
+	    "usage: %s [-d N] [--connect] [--ip-option] host port",
+	    prog);
+    const char optstring[] = "d:";
     struct option long_options[] = {
 	{"connect", 0, 0, 'c'},
 	{"ip-option", 0, 0, 'o'},
@@ -232,11 +248,15 @@ int main(int argc, char ** argv)
 
     int use_ipoptions = 0;
     int connect = 0;
+    unsigned multiplier = 1;
 
     int ch;
     while((ch = getopt_long(argc, argv,
 			    optstring, &long_options[0], 0)) != -1) {
 	switch(ch) {
+	case 'd':
+	    multiplier = strtoul(optarg, 0, 0);
+	    break;
 	case 'c':
 	    connect = 1;
 	    break;
@@ -261,7 +281,7 @@ int main(int argc, char ** argv)
 	}
     }
 
-    if(argc - optind != 2) {
+    if(argc - optind != 2 || !multiplier) {
 	fprintf(stderr, "%s\n", usage);
 	return 1;
     }
@@ -269,7 +289,7 @@ int main(int argc, char ** argv)
     const char* const host = argv[optind++];
     const char* const port = argv[optind++];
     struct Client cli;
-    cli_create(&cli, host, port);
+    cli_create(&cli, host, port, multiplier);
     if(cli.fd == -1) {
 	return 1;
     }
