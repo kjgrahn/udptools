@@ -192,7 +192,7 @@ static int udpcat(FILE* in, const struct Client* const cli)
 			lineno, strerror(errno));
 	    }
 	    else if(nn!=s) {
-		fprintf(stderr, "warning: line %d: wrong answer, banana #2n",
+		fprintf(stderr, "warning: line %d: wrong answer, banana #2\n",
 			lineno);
 	    }
 	}
