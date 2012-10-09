@@ -167,7 +167,8 @@ static int udpcat(FILE* in, const struct Client* const cli)
 	acc++;
     }
     if(eacc) {
-	fprintf(stdout, "send(2) got %u packets to send; %u whined about errors\n",
+	fprintf(stdout, "send(2) got %u packets to send; "
+		"%u whined about errors\n",
 		acc, eacc);
     }
     else {
@@ -181,8 +182,10 @@ int main(int argc, char ** argv)
 {
     const char* const prog = argv[0];
     char usage[500];
-    sprintf(usage, "usage: %s [--connect] [--ip-option] host port", prog);
-    const char optstring[] = "+";
+    sprintf(usage,
+	    "usage: %s [-d N] [--connect] [--ip-option] host port",
+	    prog);
+    const char optstring[] = "d:";
     struct option long_options[] = {
 	{"connect", 0, 0, 'c'},
 	{"ip-option", 0, 0, 'o'},
@@ -193,11 +196,15 @@ int main(int argc, char ** argv)
 
     int use_ipoptions = 0;
     int connect = 0;
+    unsigned multiplier = 1;
 
     int ch;
     while((ch = getopt_long(argc, argv,
 			    optstring, &long_options[0], 0)) != -1) {
 	switch(ch) {
+	case 'd':
+	    multiplier = strtoul(optarg, 0, 0);
+	    break;
 	case 'c':
 	    connect = 1;
 	    break;
@@ -222,7 +229,7 @@ int main(int argc, char ** argv)
 	}
     }
 
-    if(argc - optind != 2) {
+    if(argc - optind != 2 || !multiplier) {
 	fprintf(stderr, "%s\n", usage);
 	return 1;
     }
