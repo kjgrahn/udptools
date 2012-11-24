@@ -5,5 +5,6 @@ test.cc
 tests
 udpcat
 udpdiscard
+udpecho
 udppump
 ethercat

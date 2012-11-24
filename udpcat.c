@@ -110,55 +110,6 @@ static ssize_t cli_send(const struct Client* const this,
 }
 
 
-/* Expect 'n' datagrams, each of 'size', to appear within
- * 'timeout' milliseconds.  Otherwise print an error.
- */
-static void cli_expect(const struct Client* const this,
-		       const int lineno,
-		       const unsigned timeout,
-		       const unsigned n,
-		       const ssize_t size)
-{
-    unsigned nn = n;
-    unsigned actual = 0;
-    struct epoll_event ev[1];
-    int rc = epoll_wait(this->efd, ev, 1, timeout);
-    if(rc==1) {
-	while(nn--) {
-	    struct iovec v = { 0, 0 };
-	    struct msghdr m = { 0, 0, &v, 1,
-				0, 0,
-				0 };
-	    const ssize_t sz = recvmsg(this->fd, &m,
-				       MSG_DONTWAIT | MSG_TRUNC);
-	    if(sz < 0 && errno == EWOULDBLOCK) {
-		break;
-	    }
-	    else if(sz < 0) {
-		fprintf(stderr, "warning: line %d: bad reply: %s\n",
-			lineno, strerror(errno));
-	    }
-	    else if(sz!=size) {
-		fprintf(stderr, "warning: line %d: wrong answer, banana #2\n",
-			lineno);
-	    }
-	    else {
-		actual++;
-	    }
-	}
-    }
-    else if(rc<0) {
-	fprintf(stderr, "warning: line %d: epoll failure: %s\n",
-		lineno, strerror(errno));
-    }
-
-    if(actual != n) {
-	fprintf(stderr, "warning: line %d: expected %u good replies, but only got %u\n",
-		lineno, n, actual);
-    }
-}
-
-
 static void cli_destroy(struct Client* const this)
 {
     freeaddrinfo(this->suggestions);
@@ -210,6 +161,97 @@ static int hexline(FILE* const in, const int lineno,
 
 
 /**
+ * Is the rxbuf same as the txbuf, keeping in mind that rxbuf might
+ * be truncated?  Print an error otherwise, and mention 'lineno'.
+ */
+static int equal(const int lineno,
+		 const void* txbuf, size_t txsize,
+		 const void* rxbuf, size_t rxsize,
+		 ssize_t received)
+{
+    if((size_t)received!=txsize) {
+	fprintf(stderr, "warning: line %d: sent %zd octets but got %zu\n",
+		lineno, txsize, received);
+	return 0;
+    }
+
+    if(memcmp(txbuf, rxbuf, (txsize>rxsize)? rxsize: txsize)) {
+	fprintf(stderr, "warning: line %d: rx data differs\n",
+		lineno);
+	return 0;
+    }
+
+    return 1;
+}
+
+
+/**
+ * Send 'n' copies of 'buf' and wait for 'n' identical responses
+ * for at most 0.5s.
+ *
+ * If 'n' is sufficiently small and the reflector on the other side is
+ * never delayed that much, this should be no problem.
+ *
+ * Complain about I/O errors, missing responses, corrupt responses,
+ * and return the number of high-level failures (0--n).
+ */
+static unsigned udpping(const uint8_t* const buf, const size_t size,
+			const int lineno,
+			const struct Client* const cli,
+			const unsigned n)
+{
+    unsigned expected = 0;
+
+    for(unsigned i=0; i<n; i++) {
+	if(cli_send(cli, buf, size) >= 0) {
+	    expected++;
+	}
+    }
+
+    /* This is not terribly efficient (two syscalls per packet) buf we
+     * don't aim for efficiency.  Nonblocking I/O or recvmmsg(2) would
+     * be better though.
+     */
+    int got = 0;
+
+    for(unsigned i=0; i<expected; i++) {
+	struct epoll_event ev;
+	/* ok, so we can wait for much more than 0.5s
+	 * in degenerate cases, but I don't want to
+	 * do clock arithmetics right now
+	 */
+	const int ew = epoll_wait(cli->efd, &ev, 1, 500);
+	if(ew==-1) {
+	    if(errno!=EINTR) {
+		fprintf(stderr, "warning: line %d: %s failed: %s\n",
+			lineno, "epoll", strerror(errno));
+		break;
+	    }
+	}
+	else if(ew==0) {
+	    break;
+	}
+	else {
+	    uint8_t rxbuf[10000];
+	    ssize_t n = recv(cli->fd, rxbuf, sizeof rxbuf, MSG_TRUNC);
+	    if(n==-1) {
+		fprintf(stderr, "warning: line %d: %s failed: %s\n",
+			lineno, "recv", strerror(errno));
+		break;
+	    }
+
+	    if(equal(lineno, buf, size, rxbuf, sizeof rxbuf, n)) {
+		got++;
+	    }
+	}
+    }
+
+    return n - got;
+}
+
+
+
+/**
  * Read hex from 'in' and write to UDP socket until
  * EOF. Will log parse errors and I/O errors meanwhile.
  * Returns an exit code.
@@ -219,39 +261,29 @@ static int udpcat(FILE* in, const struct Client* const cli)
     int lineno = 0;
     int s;
     uint8_t buf[10000];
-    unsigned acc = 0;
-    unsigned eacc = 0;
+    unsigned totalfailure = 0;
 
     while((s = hexline(in, ++lineno, buf)) != -1) {
 
+	unsigned failures = 0;
+	static const unsigned BATCH = 100;
 	unsigned m = cli->multiplier;
 
-	while(m--) {
-	    const ssize_t n = cli_send(cli, buf, s);
-	    int complained = 0;
-	    if(n!=s) {
-		if(!complained) {
-		    fprintf(stderr, "warning: line %d: sending caused %s\n",
-			    lineno, strerror(errno));
-		    complained = 1;
-		}
-		eacc++;
-	    }
-	    acc++;
+	while(m) {
+	    const unsigned batch = (m>BATCH)? BATCH: m;
+
+	    failures += udpping(buf, s, lineno, cli, batch);
+	    m -= batch;
 	}
 
-	cli_expect(cli, lineno, 500, cli->multiplier, s);
+	if(failures) {
+	    fprintf(stderr, "warning: line %d: %u packets lost\n",
+		    lineno, failures);
+	    totalfailure += failures;
+	}
     }
 
-    if(eacc) {
-	fprintf(stdout, "send(2) got %u packets to send; "
-		"%u complaint(s)\n",
-		acc, eacc);
-    }
-    else {
-	fprintf(stdout, "%u datagrams sent\n", acc);
-    }
-    return eacc!=0;
+    return totalfailure!=0;
 }
 
 
