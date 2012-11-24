@@ -28,11 +28,12 @@ namespace {
 		  const std::string& port,
 		  const bool nonblocking)
     {
-	static const struct addrinfo hints = { AI_PASSIVE,
-					       AF_UNSPEC,
-					       SOCK_DGRAM,
-					       0,
-					       0, 0, 0, 0 };
+	static const struct addrinfo hints = {
+	    AI_PASSIVE | (host.empty() ? 0 : AI_CANONNAME),
+	    AF_UNSPEC,
+	    SOCK_DGRAM,
+	    0,
+	    0, 0, 0, 0 };
 	struct addrinfo * suggestions;
 	int rc = getaddrinfo(host.empty()? 0: host.c_str(),
 			     port.c_str(),
