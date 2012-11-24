@@ -20,7 +20,7 @@ all: udpcat
 
 .PHONY: clean
 clean:
-	$(RM) udpdiscard udppump udpcat
+	$(RM) udpdiscard udpecho udppump udpcat
 	$(RM) ethercat
 	$(RM) *.o *.a Makefile.bak core TAGS
 
@@ -34,11 +34,14 @@ CXXFLAGS=-Wall -Wextra -pedantic -Wold-style-cast -std=c++98 -g -Os
 CFLAGS=-Wall -Wextra -pedantic -std=c99 -g -Os
 
 all: udpdiscard
+all: udpecho
 all: udppump
 all: udpcat
 all: ethercat
 
 udpdiscard: udpdiscard.o libudptools.a
+	$(CXX) $(CXXFLAGS) -L. -o $@ $< -l udptools
+udpecho: udpecho.o libudptools.a
 	$(CXX) $(CXXFLAGS) -L. -o $@ $< -l udptools
 udppump: udppump.o libudptools.a
 	$(CXX) $(CXXFLAGS) -L. -o $@ $< -l udptools
@@ -50,6 +53,7 @@ ethercat: ethercat.o libudptools.a
 udpcat.o: CPPFLAGS=-D_POSIX_SOURCE
 ethercat.o: CPPFLAGS=-D_BSD_SOURCE
 udpdiscard.o: CXXFLAGS+=-Wno-old-style-cast
+udpecho.o: CXXFLAGS+=-Wno-old-style-cast
 
 libudptools.a: hexdump.o
 libudptools.a: hexread.o
