@@ -23,6 +23,10 @@
 #include <errno.h>
 #include <sys/epoll.h>
 
+#ifdef MSG_WAITFORONE
+/* recvmmsg(2); Linux-specific and recent */
+#define HAS_MMSG
+#endif
 
 namespace {
 
@@ -174,22 +178,25 @@ namespace {
     }
 
 
+    /**
+     * Just something to keep track of the bits & pieces
+     * needed for our struct msghdr.
+     */
     struct Msg {
 	Msg() {
 	    iov.iov_base = buf;
 	    iov.iov_len = sizeof buf;
 	}
 
-	mmsghdr hdr_of() {
-	    mmsghdr hh;
-	    msghdr& h = hh.msg_hdr;
+	msghdr hdr_of() {
+	    msghdr h;
 	    h.msg_name = reinterpret_cast<void*>(&sa);
 	    h.msg_namelen = sizeof sa;
 	    h.msg_iov = &iov;
 	    h.msg_iovlen = 1;
 	    h.msg_control = 0;
 	    h.msg_controllen = 0;
-	    return hh;
+	    return h;
 	}
 
 	sockaddr_storage sa;
@@ -202,7 +209,7 @@ namespace {
     };
 
 
-    bool controlmsg(int fd, const std::vector<Endpoint>& ep)
+    bool controlmsg(int, const std::vector<Endpoint>&)
     {
 	return true;
     }
@@ -232,15 +239,15 @@ namespace {
 	}
     }
 
+#ifdef HAS_MMSG
     /**
      * The (blocking) UDP socket has become readable, and we're
-     * supposed to reflect whatever is there, and update the
-     * statistics.
+     * supposed to reflect at least /some/ of whatever is there, and
+     * update the statistics.
      */
     void reflect(Endpoint& ep)
     {
 	const int fd = ep.fd;
-
 	static Msg msg[5];
 	mmsghdr mm[5];
 	for(int i=0; i<5; i++) {
@@ -259,6 +266,24 @@ namespace {
 	    reflect(ep, h, len);
 	}
     }
+#else
+    void reflect(Endpoint& ep)
+    {
+	const int fd = ep.fd;
+	static Msg msg;
+	msghdr h = msg.hdr_of();
+
+	const ssize_t n = recvmsg(fd, &h, MSG_TRUNC);
+	if(n==-1) {
+	    ++ep.err;
+	    return;
+	}
+
+	unsigned len = n;
+	h.msg_iov[0].iov_len = len;
+	reflect(ep, h, len);
+    }
+#endif
 
 
     int udpserver(const std::string& control,
