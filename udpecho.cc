@@ -12,6 +12,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
+#include <cstdio>
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -209,9 +210,36 @@ namespace {
     };
 
 
-    bool controlmsg(int, const std::vector<Endpoint>&)
+    /**
+     * Handle a message on the control socket, currently
+     * q.* - quit
+     * s.* - show statistics
+     * Returning false is a request to exit.
+     */
+    bool controlmsg(const int fd, const std::vector<Endpoint>& ep)
     {
-	return true;
+	static Msg msg;
+	msghdr h = msg.hdr_of();
+
+	const ssize_t n = recvmsg(fd, &h, MSG_TRUNC);
+	if(n<1) {
+	    return false;
+	}
+
+	char cmd = msg.buf[0];
+	switch(cmd) {
+	case 's':
+	    msg.iov.iov_len = std::sprintf(msg.buf, "Statistics? Sorry, maybe later.\n");
+	    break;
+	case 'q':
+	default:
+	    cmd = 'q';
+	    msg.iov.iov_len = std::sprintf(msg.buf, "Goodbye.\n");
+	}
+
+	(void)sendmsg(fd, &h, MSG_DONTWAIT);
+
+	return cmd != 'q';
     }
 
 
