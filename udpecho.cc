@@ -9,6 +9,7 @@
 #include <vector>
 #include <iostream>
 #include <ostream>
+#include <sstream>
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
@@ -144,6 +145,17 @@ public:
     Accumulator operator++ () { val++; return *this; }
     Accumulator operator+= (unsigned n) { val+=n; return *this; }
 
+    std::ostream& rjust(std::ostream& os, int width) const {
+	char buf[20];
+	if(val) {
+	    std::sprintf(buf, "%*u", width, val);
+	}
+	else {
+	    std::sprintf(buf, "%*s", width, "");
+	}
+	return os << buf;
+    }
+
 private:
     T val;
 };
@@ -167,12 +179,31 @@ struct Endpoint {
 };
 
 
+std::ostream& operator<< (std::ostream& os, const std::vector<Endpoint>& val)
+{
+    os << "     rx      tx   err fd\n";
+    for(std::vector<Endpoint>::const_iterator i = val.begin();
+	i != val.end();
+	i++) {
+	const Endpoint& ep = *i;
+	ep.rx.rjust(os, 7) << ' ';
+	ep.tx.rjust(os, 7) << ' ';
+	ep.err.rjust(os, 5) << ' ';
+	char fd[5];
+	std::sprintf(fd, "%2d", ep.fd);
+	os << fd << " " << ep.name << '\n';
+    }
+    return os;
+}
+
+
 namespace {
 
     void epoll_add(int efd, int fd, unsigned index)
     {
 	struct epoll_event ev;
 	ev.events = EPOLLIN;
+	ev.data.u64 = 0; /* keep valgrind happy */
 	ev.data.u32 = index;
 	int err = epoll_ctl(efd, EPOLL_CTL_ADD, fd, &ev);
 	assert(!err);
@@ -210,6 +241,16 @@ namespace {
     };
 
 
+    template <class T>
+    void operator<< (Msg& msg, const T& val)
+    {
+	std::ostringstream oss;
+	oss << val;
+	const std::string s = oss.str();
+	std::copy(s.begin(), s.end(), msg.buf);
+	msg.iov.iov_len = s.size();
+    }
+
     /**
      * Handle a message on the control socket, currently
      * q.* - quit
@@ -226,15 +267,16 @@ namespace {
 	    return false;
 	}
 
-	char cmd = msg.buf[0];
+	const char cmd = msg.buf[0];
 	switch(cmd) {
 	case 's':
-	    msg.iov.iov_len = std::sprintf(msg.buf, "Statistics? Sorry, maybe later.\n");
+	    msg << ep;
 	    break;
 	case 'q':
+	    msg << "Goodbye.\n";
+	    break;
 	default:
-	    cmd = 'q';
-	    msg.iov.iov_len = std::sprintf(msg.buf, "Goodbye.\n");
+	    msg << "Usage: s, statistics; q, quit\n";
 	}
 
 	(void)sendmsg(fd, &h, MSG_DONTWAIT);
@@ -279,7 +321,7 @@ namespace {
 	static Msg msg[5];
 	mmsghdr mm[5];
 	for(int i=0; i<5; i++) {
-	    mm[i] = msg[i].hdr_of();
+	    mm[i].msg_hdr = msg[i].hdr_of();
 	}
 
 	const int n = recvmmsg(fd, mm, 5, MSG_WAITFORONE | MSG_TRUNC, 0);
