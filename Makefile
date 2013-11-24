@@ -10,13 +10,11 @@ INSTALLBASE=/usr/local
 
 .PHONY: all
 all: udpdiscard
+all: udpecho
 all: udppump
 all: udpcat
-
-# .PHONY: install
-# install: leakyqueue.cc
-# install: leakyqueue.h
-# 	install -m644 $^ $(INSTALLBASE)/lib
+all: ipcat
+all: ethercat
 
 .PHONY: clean
 clean:
@@ -33,12 +31,6 @@ checkv: tests
 CXXFLAGS=-Wall -Wextra -pedantic -Wold-style-cast -std=c++98 -g -Os
 CFLAGS=-Wall -Wextra -pedantic -std=c99 -g -Os
 
-all: udpdiscard
-all: udpecho
-all: udppump
-all: udpcat
-all: ethercat
-
 udpdiscard: udpdiscard.o libudptools.a
 	$(CXX) $(CXXFLAGS) -L. -o $@ $< -l udptools
 udpecho: udpecho.o libudptools.a
@@ -46,11 +38,14 @@ udpecho: udpecho.o libudptools.a
 udppump: udppump.o libudptools.a
 	$(CXX) $(CXXFLAGS) -L. -o $@ $< -l udptools
 udpcat: udpcat.o libudptools.a
-	$(CXX) $(CXXFLAGS) -L. -o $@ $< -l udptools
+	$(CC) $(CFLAGS) -L. -o $@ $< -l udptools
+ipcat: ipcat.o libudptools.a
+	$(CC) $(CFLAGS) -L. -o $@ $< -l udptools
 ethercat: ethercat.o libudptools.a
-	$(CXX) $(CXXFLAGS) -L. -o $@ $< -l udptools -lpcap
+	$(CC) $(CFLAGS) -L. -o $@ $< -l udptools -lpcap
 
 udpcat.o: CPPFLAGS=-D_POSIX_SOURCE
+ipcat.o: CPPFLAGS=-D_POSIX_SOURCE
 ethercat.o: CPPFLAGS=-D_BSD_SOURCE
 udpdiscard.o: CXXFLAGS+=-Wno-old-style-cast
 udpecho.o: CXXFLAGS+=-Wno-old-style-cast
@@ -89,6 +84,7 @@ love:
 ethercat.o: hexread.h
 hexdump.o: hexdump.h
 hexread.o: hexread.h
+ipcat.o: hexread.h
 udpcat.o: hexread.h
 test/hexdump.o: hexdump.h
 test/hexread.o: hexread.h

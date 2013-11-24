@@ -7,4 +7,5 @@ udpcat
 udpdiscard
 udpecho
 udppump
+ipcat
 ethercat
