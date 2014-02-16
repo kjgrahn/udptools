@@ -1,0 +1,127 @@
+.ss 12 0
+.de BP
+.IP \\fB\\$*
+..
+.
+.
+.TH udpcat 1 "FEB 2014" UDPTOOLS "User Manuals"
+.SH "NAME"
+udpcat \- general UDP datagram sender
+.
+.SH "SYNOPSIS"
+.B udpcat
+.RB [ \-d
+.IR N ]
+.RB [ --connect ]
+.RB [ --ip-option ]
+.RB [ \-s
+.IR source ]
+.I host
+.I port
+.br
+.B udpcat
+.B --version
+|
+.B --help
+.
+.PP
+.B ipcat
+.RB [ \-d
+.IR N ]
+.RB [ --ip-option ]
+.I host
+.I protocol
+.br
+.B ipcat
+.B --version
+|
+.B --help
+.
+.SH "DESCRIPTION"
+.B udpcat
+reads lines of hex dumps from
+.I stdin
+and writes them as UDP datagrams, one per input line.
+It also listens to responses and complains if some datagram is
+not echoed verbatim (it assumes it's talking to a service similar
+to the UDP
+.B echo
+service traditionally available on port 7).
+.
+.PP
+It's vaguely similar to
+.BR "nc \-u \fIhost port" ,
+except:
+.IP \- 3x
+Input is a hex dump so it's easy to send binary payload.
+.IP \-
+Udpcat verifies responses; netcat echoes them.
+.
+.PP
+Like you'd expect, there is IPv6 support, and you can
+use host and service names for
+.I host
+and
+.IR port ,
+not just numerical addresses and port numbers.
+.
+.PP
+.B ipcat
+is similar, but lets you send raw IPv4 datagrams carrying
+.I protocol
+instead. I.e. the hex dump lines provided as input becomes
+IPv4 payload rather than UDP payload.
+IPv6 is not supported here.
+.PP
+The
+.I protocol
+may be given numerically or as a protocol name, e.g.
+.BR udp ,
+.BR icmp ,
+.BR sctp .
+.
+.SS "Input syntax"
+The input is simply lines of hex dumps.  You may use any amount
+of whitespace between octets to increase readability;
+.IR "1234f0" ,
+.I "1234\~f0"
+and
+.I "12\~34\~f0"
+mean the same thing.
+.PP
+Parse errors are detected and reported.
+.
+.SH "OPTIONS"
+.
+.BP "\-d\ \fIN"
+Send every datagram duplicated
+.I N
+times. Bursts of at most 100 datagrams will be sent; then
+udpcat will stop to collect responses for at most 0.5 seconds
+before continuing.
+.
+.BP "--connect"
+.BR connect (2)
+the socket to the destination.  This may help performance
+and let you detect more errors like
+.IR "host unreachable" .
+It might also enable PMTU discovery and prevent IP fragmentation.
+.
+.BP "--ip-option"
+Send a dummy IPv4 option with every packet, just to see what happens.
+.
+.BP "\-s\ \fIsource"
+Bind to a local address which will become the source address
+for the datagrams.
+.
+.SH "LICENSE"
+Modified BSD.
+.
+.SH "AUTHOR"
+J\(:orgen Grahn
+.IR \[fo]grahn+src@snipabacken.se\[fc] .
+.
+.SH "SEE ALSO"
+.BR nc (1),
+.BR udp (7),
+.BR raw (7).
