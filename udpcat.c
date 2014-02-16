@@ -3,7 +3,7 @@
  * udpcat.cc -- kind of like 'netcat -u host port', but with hexdump input
  *              so it can be binary
  *
- * Copyright (c) 2008, 2011, 2012 Jörgen Grahn
+ * Copyright (c) 2008, 2011, 2012, 2014 Jörgen Grahn
  * All rights reserved.
  *
  */
@@ -75,6 +75,38 @@ static void cli_create(struct Client* const this,
 
     this->connected = 0;
     this->multiplier = multiplier;
+}
+
+
+static int cli_bind(struct Client* const this,
+		    const char* source)
+{
+    static const struct addrinfo hints = { AI_ADDRCONFIG | AI_PASSIVE,
+					   AF_UNSPEC,
+					   SOCK_DGRAM,
+					   0,
+					   0, 0, 0, 0 };
+    struct addrinfo * suggestions;
+    int rc = getaddrinfo(source,
+			 NULL,
+			 &hints,
+			 &suggestions);
+    if(rc) {
+	fprintf(stderr, "error: can't bind: %s\n", gai_strerror(rc));
+	return 0;
+    }
+
+    const struct addrinfo first = *suggestions;
+    rc = bind(this->fd,
+	      first.ai_addr,
+	      first.ai_addrlen);
+    freeaddrinfo(suggestions);
+    if(rc) {
+	fprintf(stderr, "error: can't bind: %s\n", strerror(errno));
+	return 0;
+    }
+
+    return 1;
 }
 
 
@@ -208,7 +240,7 @@ static unsigned udpping(const uint8_t* const buf, const size_t size,
 	}
     }
 
-    /* This is not terribly efficient (two syscalls per packet) buf we
+    /* This is not terribly efficient (two syscalls per packet) but we
      * don't aim for efficiency.  Nonblocking I/O or recvmmsg(2) would
      * be better though.
      */
@@ -292,9 +324,10 @@ int main(int argc, char ** argv)
     const char* const prog = argv[0];
     char usage[500];
     sprintf(usage,
-	    "usage: %s [-d N] [--connect] [--ip-option] host port",
+	    "usage: %s [-d N] [--connect] [--ip-option] "
+	    "[-s source] host port",
 	    prog);
-    const char optstring[] = "d:";
+    const char optstring[] = "d:s:";
     struct option long_options[] = {
 	{"connect", 0, 0, 'c'},
 	{"ip-option", 0, 0, 'o'},
@@ -303,6 +336,8 @@ int main(int argc, char ** argv)
 	{0, 0, 0, 0}
     };
 
+    char source[300];
+    strcpy(source, "");
     int use_ipoptions = 0;
     int connect = 0;
     unsigned multiplier = 1;
@@ -313,6 +348,9 @@ int main(int argc, char ** argv)
 	switch(ch) {
 	case 'd':
 	    multiplier = strtoul(optarg, 0, 0);
+	    break;
+	case 's':
+	    strcpy(source, optarg);
 	    break;
 	case 'c':
 	    connect = 1;
@@ -348,6 +386,10 @@ int main(int argc, char ** argv)
     struct Client cli;
     cli_create(&cli, host, port, multiplier);
     if(cli.fd == -1) {
+	return 1;
+    }
+
+    if(*source && !cli_bind(&cli, source)) {
 	return 1;
     }
 
