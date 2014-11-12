@@ -33,14 +33,29 @@ struct Client {
 };
 
 
+static int getproto(const char* name)
+{
+    char* end;
+    long n = strtol(name, &end, 0);
+    if(*end) {
+	n = 0;
+	struct protoent* pent = getprotobyname(name);
+	if(pent) {
+	    n = pent->p_proto;
+	}
+    }
+    return n;
+}
+
+
 static void cli_create(struct Client* const this,
 		       const char* host, const char* proto,
 		       unsigned multiplier)
 {
     this->fd = -1;
 
-    struct protoent* pent = getprotobyname(proto);
-    if(!pent) {
+    const int pn = getproto(proto);
+    if(!pn) {
 	fprintf(stderr, "error: \"%s\": not a protocol name\n", proto);
 	return;
     }
@@ -48,7 +63,7 @@ static void cli_create(struct Client* const this,
     const struct addrinfo hints = { AI_ADDRCONFIG | AI_CANONNAME,
 				    AF_INET6,
 				    SOCK_RAW,
-				    pent->p_proto,
+				    pn,
 				    0, 0, 0, 0 };
     int rc = getaddrinfo(host,
 			 NULL,
