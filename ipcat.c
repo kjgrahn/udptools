@@ -3,7 +3,7 @@
  *         instead of UDP, and with hex input so it's more
  *         feasible to send any data
  *
- * Copyright (c) 2013 Jörgen Grahn
+ * Copyright (c) 2013, 2014 Jörgen Grahn
  * All rights reserved.
  *
  */
@@ -46,7 +46,7 @@ static void cli_create(struct Client* const this,
     }
 
     const struct addrinfo hints = { AI_ADDRCONFIG | AI_CANONNAME,
-				    AF_INET,
+				    AF_INET6,
 				    SOCK_RAW,
 				    pent->p_proto,
 				    0, 0, 0, 0 };
