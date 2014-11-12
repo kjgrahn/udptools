@@ -26,6 +26,7 @@ udpcat \- general UDP datagram sender
 .
 .PP
 .B ipcat
+.RB [ --flood ]
 .RB [ \-d
 .IR N ]
 .RB [ --ip-option ]
@@ -112,6 +113,11 @@ Send a dummy IPv4 option with every packet, just to see what happens.
 .BP "\-s\ \fIsource"
 Bind to a local address which will become the source address
 for the datagrams.
+.
+.BP "--flood"
+Kind of like
+.IR "ping \-f" :
+don't wait for responses. Send as fast as you can.
 .
 .SH "LICENSE"
 Modified BSD.

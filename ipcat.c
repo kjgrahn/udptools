@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <stdbool.h>
 
 #include <getopt.h>
 #include <sys/types.h>
@@ -30,6 +31,7 @@ struct Client {
     struct addrinfo * suggestions;
     int efd;
     unsigned multiplier;
+    bool flood;
 };
 
 
@@ -49,8 +51,7 @@ static int getproto(const char* name)
 
 
 static void cli_create(struct Client* const this,
-		       const char* host, const char* proto,
-		       unsigned multiplier)
+		       const char* host, const char* proto)
 {
     this->fd = -1;
 
@@ -93,8 +94,6 @@ static void cli_create(struct Client* const this,
     ev.data.ptr = 0;
     rc = epoll_ctl(efd, EPOLL_CTL_ADD, fd, &ev);
     assert(!rc);
-
-    this->multiplier = multiplier;
 }
 
 
@@ -182,6 +181,23 @@ static int equal(const int lineno,
 }
 
 
+static unsigned flood(const uint8_t* const buf, const size_t size,
+		      const int lineno,
+		      const struct Client* const cli,
+		      const unsigned n)
+{
+    unsigned expected = 0;
+
+    for(unsigned i=0; i<n; i++) {
+	if(cli_send(cli, buf, size) >= 0) {
+	    expected++;
+	}
+    }
+
+    return 0;
+}
+
+
 /**
  * Send 'n' copies of 'buf' and wait for 'n' identical responses
  * for at most 0.5s.
@@ -247,7 +263,6 @@ static unsigned ping(const uint8_t* const buf, const size_t size,
 }
 
 
-
 /**
  * Read hex from 'in' and write to socket until
  * EOF. Will log parse errors and I/O errors meanwhile.
@@ -269,7 +284,12 @@ static int ipcat(FILE* in, const struct Client* const cli)
 	while(m) {
 	    const unsigned batch = (m>BATCH)? BATCH: m;
 
-	    failures += ping(buf, s, lineno, cli, batch);
+	    if(cli->flood) {
+		failures += flood(buf, s, lineno, cli, batch);
+	    }
+	    else {
+		failures += ping(buf, s, lineno, cli, batch);
+	    }
 	    m -= batch;
 	}
 
@@ -289,25 +309,29 @@ int main(int argc, char ** argv)
     const char* const prog = argv[0];
     char usage[500];
     sprintf(usage,
-	    "usage: %s [-d N] [--ip-option] host protocol",
+	    "usage: %s [--flood] [-d N] [--ip-option] host protocol",
 	    prog);
     const char optstring[] = "d:";
     struct option long_options[] = {
+	{"flood", 0, 0, 'F'},
 	{"ip-option", 0, 0, 'o'},
 	{"version", 0, 0, 'v'},
 	{"help", 0, 0, 'h'},
 	{0, 0, 0, 0}
     };
 
+    struct Client cli = { .multiplier = 1 };
     int use_ipoptions = 0;
-    unsigned multiplier = 1;
 
     int ch;
     while((ch = getopt_long(argc, argv,
 			    optstring, &long_options[0], 0)) != -1) {
 	switch(ch) {
 	case 'd':
-	    multiplier = strtoul(optarg, 0, 0);
+	    cli.multiplier = strtoul(optarg, 0, 0);
+	    break;
+	case 'F':
+	    cli.flood = true;
 	    break;
 	case 'o':
 	    use_ipoptions = 1;
@@ -330,15 +354,14 @@ int main(int argc, char ** argv)
 	}
     }
 
-    if(argc - optind != 2 || !multiplier) {
+    if(argc - optind != 2 || !cli.multiplier) {
 	fprintf(stderr, "%s\n", usage);
 	return 1;
     }
 
     const char* const host = argv[optind++];
     const char* const proto = argv[optind++];
-    struct Client cli;
-    cli_create(&cli, host, proto, multiplier);
+    cli_create(&cli, host, proto);
     if(cli.fd == -1) {
 	return 1;
     }
