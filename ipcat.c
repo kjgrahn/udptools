@@ -62,7 +62,7 @@ static void cli_create(struct Client* const this,
     }
 
     const struct addrinfo hints = { AI_ADDRCONFIG | AI_CANONNAME,
-				    AF_INET6,
+				    AF_UNSPEC,
 				    SOCK_RAW,
 				    pn,
 				    0, 0, 0, 0 };
