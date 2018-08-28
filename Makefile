@@ -44,9 +44,9 @@ ipcat: ipcat.o libudptools.a
 ethercat: ethercat.o libudptools.a
 	$(CC) $(CFLAGS) -L. -o $@ $< -l udptools -lpcap
 
-udpcat.o: CPPFLAGS=-D_POSIX_SOURCE
-ipcat.o: CPPFLAGS=-D_POSIX_SOURCE
-ethercat.o: CPPFLAGS=-D_BSD_SOURCE
+udpcat.o: CFLAGS+=-std=gnu99
+ipcat.o: CFLAGS+=-std=gnu99
+ethercat.o: CFLAGS+=-std=gnu99
 udpdiscard.o: CXXFLAGS+=-Wno-old-style-cast
 udpecho.o: CXXFLAGS+=-Wno-old-style-cast
 
