@@ -1,0 +1,96 @@
+.ss 12 0
+.de BP
+.IP \\fB\\$*
+..
+.
+.
+.TH mcast 1 "JUN 2024" UDPTOOLS "User Manuals"
+.SH "NAME"
+mcast \- multicast UDP datagram sender
+.
+.SH "SYNOPSIS"
+.B mcast
+.RB [ \-a ]
+.RB [ \-d
+.IR N ]
+.RB [ --ttl
+.IR N ]
+.RB [ --connect ]
+.RB [ \-s
+.IR source ]
+.I addr
+.I port
+.br
+.B mcast
+.B --version
+.br
+.B mcast
+.B --help
+.
+.SH "DESCRIPTION"
+.B mcast
+reads lines of hex dumps from
+.I stdin
+and writes them as UDP datagrams, one per input line.
+Alternatively, if
+.B \-a
+is provided, it writes the input lines as-is.
+.
+.PP
+It's vaguely similar to
+.BR "nc \-u \fIhost port" .
+.BR socat (1)
+can probably do the same things, but I cannot be bothered
+to learn using it.
+.
+.SS "Input syntax"
+The input is simply lines of hex dumps.  You may use any amount
+of whitespace between octets to increase readability;
+.IR "1234f0" ,
+.I "1234\~f0"
+and
+.I "12\~34\~f0"
+mean the same thing.
+.PP
+Parse errors are detected and reported.
+.
+.SH "OPTIONS"
+.
+.BP "\-a"
+Don't expect input to be a hex dump; send each input line
+(minus the line terminator) as a datagram.
+.
+.BP "\-d\ \fIN"
+Send every datagram duplicated
+.I N
+times.
+.
+.BP "--ttl\ \fIN"
+Set
+.BR IP_MULTICAST_TTL .
+1 means "don't pass across routers".
+.
+.BP "--connect"
+.BR connect (2)
+the socket to the destination.  This may help performance
+and let you detect more errors like
+.IR "host unreachable" .
+It might also enable PMTU discovery and prevent IP fragmentation.
+.
+.BP "\-s\ \fIsource"
+Bind to a local address which will become the source address
+for the datagrams.
+.
+.SH "BUGS"
+There's no IPv6 support.
+.
+.SH "AUTHOR"
+J\(:orgen Grahn
+\[fo]grahn@snipabacken.se\[fc].
+.
+.SH "LICENSE"
+The GNU General Public License (GPL) version 2 or (at your option) version 3.
+.
+.SH "SEE ALSO"
+.BR nc (1),
+.BR ip (7).

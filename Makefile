@@ -18,18 +18,23 @@ all: udppump
 all: udpcat
 all: ipcat
 all: ethercat
+all: mcast
 all: tests
 
 .PHONY: install
 install: udpcat udpcat.1
 install:  ipcat  ipcat.1
+install:  mcast  mcast.1
 	install -d $(INSTALLBASE)/{bin,man/man1}
 	install -m755 {udp,ip}cat   $(INSTALLBASE)/bin/
 	install -m644 {udp,ip}cat.1 $(INSTALLBASE)/man/man1/
+	install -m755 mcast         $(INSTALLBASE)/bin/
+	install -m644 mcast.1       $(INSTALLBASE)/man/man1/
 
 .PHONY: clean
 clean:
 	$(RM) udpdiscard udpecho udppump udpcat
+	$(RM) mcast
 	$(RM) ethercat
 	$(RM) {,test/}*.o
 	$(RM) lib*.a
@@ -55,6 +60,8 @@ ipcat: ipcat.o libudptools.a
 	$(CC) $(CFLAGS) -L. -o $@ $< -l udptools
 ethercat: ethercat.o libudptools.a
 	$(CC) $(CFLAGS) -L. -o $@ $< -l udptools -lpcap
+mcast: mcast.o libudptools.a
+	$(CXX) $(CXXFLAGS) -L. -o $@ $< -l udptools
 
 udpcat.o: CFLAGS+=-std=gnu99
 ipcat.o: CFLAGS+=-std=gnu99
