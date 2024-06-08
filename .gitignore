@@ -1,4 +1,4 @@
-*.bak
+dep/
 *.o
 *.a
 test.cc
