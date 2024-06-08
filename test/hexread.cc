@@ -5,7 +5,7 @@
  */
 #include <hexread.h>
 
-#include <testicle.h>
+#include <orchis.h>
 #include <vector>
 #include <cstring>
 
@@ -28,7 +28,7 @@ namespace {
 
 namespace hexr {
 
-    using testicle::assert_eq;
+    using orchis::assert_eq;
 
     void test_nil()
     {

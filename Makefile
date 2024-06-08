@@ -67,7 +67,7 @@ libudptools.a: hexread.o
 	$(AR) $(ARFLAGS) $@ $^
 
 test.cc: libtest.a
-	testicle -o$@ $^
+	orchis -o$@ $^
 
 tests: test.o libtest.a libudptools.a
 	$(CXX) $(CXXFLAGS) -o $@ $< -L. -ltest -ludptools

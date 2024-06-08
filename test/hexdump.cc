@@ -5,7 +5,7 @@
  */
 #include <hexdump.h>
 
-#include <testicle.h>
+#include <orchis.h>
 #include <string>
 #include <cassert>
 
@@ -37,7 +37,7 @@ namespace {
 
 namespace hex {
 
-    using testicle::assert_eq;
+    using orchis::assert_eq;
 
     void test_nil()
     {
