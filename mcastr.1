@@ -1,0 +1,62 @@
+.ss 12 0
+.de BP
+.IP \\fB\\$*
+..
+.
+.
+.TH mcastr 1 "JUN 2024" UDPTOOLS "User Manuals"
+.SH "NAME"
+mcastr \- multicast UDPv4 datagram receiver
+.
+.SH "SYNOPSIS"
+.B mcastr
+.I group
+.I port
+.br
+.B mcastr
+.B --version
+.br
+.B mcastr
+.B --help
+.
+.SH "DESCRIPTION"
+.B mcastr
+simply joins a multicast group, reads whatever UDP datagrams show up,
+and prints a dot for each (or an
+.B e
+for a read error).
+.
+.IP "" 4x
+Printing something more interesting could have been desirable,
+but you're probably going to listen in using
+.BR tcpdump (1),
+anyway.
+.
+.PP
+IPv4 multicast groups are
+.BR 224.0.0.0/4 ,
+with the
+.B 239.0.0.0/8
+part seemingly more commonly used by applications.
+.
+.SH "BUGS"
+There's no IPv6 support.
+.PP
+It should be possible to supply the
+.I group
+as a name, not just as an IPv4 address.
+.PP
+Multicast appears to be an ill-concieved, failed technology,
+with certain rare and local uses.
+.
+.SH "AUTHOR"
+J\(:orgen Grahn
+\[fo]grahn@snipabacken.se\[fc].
+.
+.SH "LICENSE"
+The GNU General Public License (GPL) version 2 or (at your option) version 3.
+.
+.SH "SEE ALSO"
+.BR nc (1),
+.BR tcpdump (8),
+.BR ip (7).
