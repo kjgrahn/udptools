@@ -73,6 +73,20 @@ namespace {
 	return !err;
     }
 
+    in_addr in4_of(const sockaddr& sa)
+    {
+	const auto p = reinterpret_cast<const sockaddr_in*>(&sa);
+	return p->sin_addr;
+    }
+
+    bool add_membership(int fd, const sockaddr& addr)
+    {
+	const ip_mreqn req {in4_of(addr), {}, 0};
+	int err = setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
+			     &req, sizeof req);
+	return !err;
+    }
+
     unsigned atoi(const std::string& s, unsigned def)
     {
 	if (s.empty()) return def;
@@ -188,6 +202,10 @@ namespace {
 	    return error("cannot connect");
 	}
 
+	if (arg.join && !add_membership(fd, *ai.ai_addr)) {
+	    return error("IP_ADD_MEMBERSHIP");
+	}
+
 	const Tx tx {fd, ai, arg.dst.connect, arg.dup};
 
 	if (arg.hex) {
@@ -204,7 +222,7 @@ int main(int argc, char ** argv)
     const std::string prog = argv[0] ? argv[0] : "mcast";
     const std::string usage = "usage: "
 	+ prog +
-	" [-a] [-d N] [--ttl N] [--connect] [-s source]"
+	" [-a] [-d N] [--ttl N] [--connect] [--join] [-s source]"
 	" addr port\n"
 	"       "
 	+ prog + " --help\n" +
@@ -214,6 +232,7 @@ int main(int argc, char ** argv)
     const struct option long_options[] = {
 	{"ttl",		 1, 0, 'T'},
 	{"connect",	 0, 0, 'C'},
+	{"join",	 0, 0, 'J'},
 	{"help",	 0, 0, 'h'},
 	{"version",	 0, 0, 'v'},
 	{0, 0, 0, 0}
@@ -224,6 +243,7 @@ int main(int argc, char ** argv)
 	std::string dup;
 	std::string bind;
 	std::string ttl;
+	bool join = false;
 	struct {
 	    bool connect = false;
 	    std::string host;
@@ -239,6 +259,7 @@ int main(int argc, char ** argv)
 	case 'd': arg.dup = optarg; break;
 	case 'T': arg.ttl = optarg; break;
 	case 'C': arg.dst.connect = true; break;
+	case 'J': arg.join = true; break;
 	case 's': arg.bind = optarg; break;
 	case 'h':
 	    std::cout << usage << '\n';

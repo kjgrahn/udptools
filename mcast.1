@@ -2,6 +2,7 @@
 .de BP
 .IP \\fB\\$*
 ..
+.hw bene-fi-cial
 .
 .
 .TH mcast 1 "JUN 2024" UDPTOOLS "User Manuals"
@@ -16,6 +17,7 @@ mcast \- multicast UDP datagram sender
 .RB [ --ttl
 .IR N ]
 .RB [ --connect ]
+.RB [ --join ]
 .RB [ \-s
 .IR source ]
 .I addr
@@ -76,6 +78,10 @@ the socket to the destination.  This may help performance
 and let you detect more errors like
 .IR "host unreachable" .
 It might also enable PMTU discovery and prevent IP fragmentation.
+.
+.BP "--join"
+Join the group you intend to multicast to.
+This is rumored to have beneficial effects, kind of like a herbal tea.
 .
 .BP "\-s\ \fIsource"
 Bind to a local address which will become the source address
