@@ -67,9 +67,18 @@ namespace {
 
     bool mcast_ttl(int fd, const std::string& s)
     {
+	unsigned char uttl = std::strtoul(s.c_str(), nullptr, 10);
 	int ttl = std::strtol(s.c_str(), nullptr, 10);
-	int err = setsockopt(fd, IPPROTO_IP, IP_MULTICAST_TTL,
-			     &ttl, sizeof ttl);
+	int err;
+	/* OpenBSD has u_char as parameter, while Linux has int. A
+	 * sign, perhaps, that nobody takes multicast seriously enough
+	 * to maintain a portable API. Try both.
+	 */
+	err = setsockopt(fd, IPPROTO_IP, IP_MULTICAST_TTL,
+			 &uttl, sizeof uttl);
+	if (!err || errno!=EINVAL) return !err;
+	err = setsockopt(fd, IPPROTO_IP, IP_MULTICAST_TTL,
+			 &ttl, sizeof ttl);
 	return !err;
     }
 
