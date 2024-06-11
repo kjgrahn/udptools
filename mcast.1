@@ -17,7 +17,9 @@ mcast \- multicast UDP datagram sender
 .RB [ --ttl
 .IR N ]
 .RB [ --connect ]
-.RB [ --join ]
+.RB [ --join
+.IR index ]
+\&...
 .RB [ \-s
 .IR source ]
 .I addr
@@ -79,9 +81,12 @@ and let you detect more errors like
 .IR "host unreachable" .
 It might also enable PMTU discovery and prevent IP fragmentation.
 .
-.BP "--join"
-Join the group you intend to multicast to.
+.BP "--join\ \fIindex"
+Join the group you intend to multicast to, on a certain interface specified
+by its index.
 This is rumored to have beneficial effects, kind of like a herbal tea.
+.IP
+You can specify this multiple times to join on several interfaces.
 .
 .BP "\-s\ \fIsource"
 Bind to a local address which will become the source address

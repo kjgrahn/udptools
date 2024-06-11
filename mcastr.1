@@ -10,6 +10,9 @@ mcastr \- multicast UDPv4 datagram receiver
 .
 .SH "SYNOPSIS"
 .B mcastr
+.RB \-i
+.IR index
+\&...
 .I group
 .I port
 .br
@@ -39,12 +42,20 @@ with the
 .B 239.0.0.0/8
 part seemingly more commonly used by applications.
 .
+.SH "OPTIONS"
+.
+.BP "\-i\ \fIindex"
+Join the group on the interface specified by its
+.IR index .
+This option can be specified multiple times.
+.
 .SH "BUGS"
 There's no IPv6 support.
 .PP
 It should be possible to supply the
 .I group
 as a name, not just as an IPv4 address.
+Likewise for the interfaces.
 .PP
 Multicast appears to be an ill-concieved, failed technology,
 with certain rare and local uses.

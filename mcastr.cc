@@ -53,9 +53,9 @@ namespace {
 	return addr;
     }
 
-    bool add_membership(int fd, const in_addr& addr)
+    bool add_membership(int fd, const in_addr& addr, int index)
     {
-	const ip_mreqn req {addr, {}, 0};
+	const ip_mreqn req {addr, {}, index};
 	int err = setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP,
 			     &req, sizeof req);
 	return !err;
@@ -85,12 +85,16 @@ namespace {
 
 	const int fd = socket(ai.ai_family, ai.ai_socktype, ai.ai_protocol);
 	if (fd==-1) return error("cannot open socket");
-
+/*
 	if (ai.ai_addr && bind(fd, ai.ai_addr, ai.ai_addrlen) == -1) {
 	    return error("cannot bind");
 	}
-
-	if (!add_membership(fd, group)) return error("IP_ADD_MEMBERSHIP");
+*/
+	for (auto ifindex : arg.interfaces) {
+	    if (!add_membership(fd, group, ifindex)) {
+		return error("IP_ADD_MEMBERSHIP");
+	    }
+	}
 
 	while (1) {
 	    char buf[1];
@@ -99,6 +103,12 @@ namespace {
 	    out.put(ch).flush();
 	}
     }
+
+    unsigned atoi(const std::string& s, unsigned def)
+    {
+	if (s.empty()) return def;
+	return std::strtoul(s.c_str(), nullptr, 10);
+    }
 }
 
 int main(int argc, char ** argv)
@@ -106,12 +116,12 @@ int main(int argc, char ** argv)
     const std::string prog = argv[0] ? argv[0] : "mcastr";
     const std::string usage = "usage: "
 	+ prog +
-	" group port\n"
+	" -i index ... group port\n"
 	"       "
 	+ prog + " --help\n" +
 	"       "
 	+ prog + " --version";
-    const char optstring[] = "";
+    const char optstring[] = "i:";
     const struct option long_options[] = {
 	{"help",	 0, 0, 'h'},
 	{"version",	 0, 0, 'v'},
@@ -119,6 +129,7 @@ int main(int argc, char ** argv)
     };
 
     struct {
+	std::vector<unsigned short> interfaces;
 	std::string group;
 	std::string port;
     } arg;
@@ -127,6 +138,9 @@ int main(int argc, char ** argv)
     while ((ch = getopt_long(argc, argv,
 			     optstring, &long_options[0], 0)) != -1) {
 	switch(ch) {
+	case 'i':
+	    arg.interfaces.push_back(atoi(optarg, 0));
+	    break;
 	case 'h':
 	    std::cout << usage << '\n';
 	    return 0;
@@ -145,7 +159,7 @@ int main(int argc, char ** argv)
 	}
     }
 
-    if (optind + 2 != argc) {
+    if (optind + 2 != argc || arg.interfaces.empty()) {
 	std::cerr << "error: required argument missing\n"
 		  << usage << '\n';
 	return 1;
