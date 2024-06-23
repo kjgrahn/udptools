@@ -85,11 +85,11 @@ namespace {
 
 	const int fd = socket(ai.ai_family, ai.ai_socktype, ai.ai_protocol);
 	if (fd==-1) return error("cannot open socket");
-/*
+
 	if (ai.ai_addr && bind(fd, ai.ai_addr, ai.ai_addrlen) == -1) {
 	    return error("cannot bind");
 	}
-*/
+
 	for (auto ifindex : arg.interfaces) {
 	    if (!add_membership(fd, group, ifindex)) {
 		return error("IP_ADD_MEMBERSHIP");
